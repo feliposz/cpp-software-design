@@ -113,6 +113,113 @@ struct Either : Match
     }
 };
 
+struct Choice : Match
+{
+    vector<Match *> patterns;
+
+    Choice(vector<Match *> patterns, Match *rest = NULL_MATCH)
+    {
+        this->patterns = patterns;
+        this->rest = rest;
+    }
+
+    size_t _match(const string &text, size_t start = 0) override
+    {
+        for (const auto &pat : this->patterns)
+        {
+            size_t end = pat->_match(text, start);
+            if (end != NOT_A_MATCH)
+            {
+                end = this->rest->_match(text, end);
+                if (end == text.length())
+                {
+                    return end;
+                }
+            }
+        }
+        return NOT_A_MATCH;
+    }
+};
+
+struct OnePlus : Match
+{
+    char c;
+
+    OnePlus(char c, Match *rest = NULL_MATCH)
+    {
+        this->c = c;
+        this->rest = rest;
+    }
+
+    size_t _match(const string &text, size_t start = 0) override
+    {
+        for (size_t i = start; i < text.length(); i++)
+        {
+            if (this->c == text[i])
+            {
+                size_t end = this->rest->_match(text, i + 1);
+                if (end == text.length())
+                {
+                    return end;
+                }
+            }
+            else
+            {
+                break;
+            }
+        }
+        return NOT_A_MATCH;
+    }
+};
+
+struct Charset : Match
+{
+    string charset;
+
+    Charset(string charset, Match *rest = NULL_MATCH)
+    {
+        this->charset = charset;
+        this->rest = rest;
+    }
+
+    size_t _match(const string &text, size_t start = 0) override
+    {
+        for (const char &c : this->charset)
+        {
+            if (text[start] == c)
+            {
+                size_t end = this->rest->_match(text, start + 1);
+                if (end == text.length())
+                {
+                    return end;
+                }
+            }
+        }
+        return NOT_A_MATCH;
+    }
+};
+
+struct Range : Match
+{
+    char left, right;
+
+    Range(char left, char right, Match *rest = NULL_MATCH)
+    {
+        this->left = left;
+        this->right= right;
+        this->rest = rest;
+    }
+
+    size_t _match(const string &text, size_t start = 0) override
+    {
+        if (text[start] >= left && text[start] <= right)
+        {
+            return this->rest->_match(text, start + 1);
+        }
+        return NOT_A_MATCH;
+    }
+};
+
 void test_literal_match_entire_string()
 {
     assert((new Lit("abc"))->match("abc"));
@@ -183,9 +290,134 @@ void test_either_followed_by_literal_no_match()
     assert(!(new Either(new Lit("a"), new Lit("b"), new Lit("c")))->match("ax"));
 }
 
+void test_oneplus_empty_no_match()
+{
+    assert(!(new OnePlus('a'))->match(""));
+}
+
+void test_oneplus_matches_one()
+{
+    assert((new OnePlus('a'))->match("a"));
+}
+
+void test_oneplus_matches_multiple()
+{
+    assert((new OnePlus('a'))->match("aaa"));
+}
+
+void test_oneplus_one_no_match()
+{
+    assert(!(new OnePlus('a'))->match("x"));
+}
+
+void test_oneplus_multiple_no_match()
+{
+    assert(!(new OnePlus('a'))->match("xax"));
+}
+
+void test_oneplus_matches_as_prefix()
+{
+    assert((new OnePlus('x', new Lit("abc")))->match("xxabc"));
+}
+
+void test_oneplus_matches_as_suffix()
+{
+    assert((new Lit("abc", new OnePlus('x')))->match("abcxx"));
+}
+
+void test_oneplus_matches_as_infix()
+{
+    assert((new Lit("abc", new OnePlus('x', new Lit("def"))))->match("abcxxdef"));
+}
+
+void test_charset_matches()
+{
+    assert((new Charset("aeiou"))->match("i"));
+}
+
+void test_charset_no_match()
+{
+    assert(!(new Charset("aeiou"))->match("x"));
+}
+
+void test_charset_empty_no_match()
+{
+    assert(!(new Charset("aeiou"))->match(""));
+}
+
+void test_range_start_matches()
+{
+    assert((new Range('a', 'f'))->match("a"));
+}
+
+void test_range_mid_matches()
+{
+    assert((new Range('a', 'f'))->match("c"));
+}
+
+void test_range_end_matches()
+{
+    assert((new Range('a', 'f'))->match("f"));
+}
+
+void test_range_no_match()
+{
+    assert(!(new Range('a', 'f'))->match("z"));
+}
+
+void test_choice_one_literal_matches()
+{
+    assert((new Choice({ new Lit("a") }))->match("a"));
+}
+
+void test_choice_one_literal_no_match()
+{
+    assert(!(new Choice({ new Lit("a") }))->match("b"));
+}
+
+void test_choice_two_literals_first()
+{
+    assert((new Choice({ new Lit("a"), new Lit("b") }))->match("a"));
+}
+
+void test_choice_three_literals_second()
+{
+    assert((new Choice({ new Lit("a"), new Lit("b"), new Lit("c") }))->match("b"));
+}
+
+void test_choice_four_literals_last()
+{
+    assert((new Choice({ new Lit("a"), new Lit("b"), new Lit("c"), new Lit("d") }))->match("d"));
+}
+
+void test_choice_two_literals_not_both()
+{
+    assert(!(new Choice({ new Lit("a"), new Lit("b") }))->match("ab"));
+}
+
+void test_choice_three_literals_not_both()
+{
+    assert(!(new Choice({ new Lit("a"), new Lit("b"), new Lit("c") }))->match("x"));
+}
+
+void test_choice_followed_by_literal_match()
+{
+    assert((new Choice({ new Lit("a"), new Lit("b") }, new Lit("c")))->match("ac"));
+}
+
+void test_choice_followed_by_literal_no_match()
+{
+    assert(!(new Choice({ new Lit("a"), new Lit("b") }, new Lit("c")))->match("ax"));
+}
+
+void test_choice_empty_no_match()
+{
+    assert(!(new Choice({ }))->match("x"));
+}
+
 void matching_main()
 {
-    cout << "Matching Patterns" << endl;
+    cout << "Matching Patterns:" << endl;
 
     test_literal_match_entire_string();
     test_literal_substring_alone_no_match();
@@ -203,4 +435,35 @@ void matching_main()
     test_either_two_literals_not_both();
     test_either_followed_by_literal_match();
     test_either_followed_by_literal_no_match();
+
+    test_oneplus_empty_no_match();
+    test_oneplus_matches_one();
+    test_oneplus_matches_multiple();
+    test_oneplus_one_no_match();
+    test_oneplus_multiple_no_match();
+    test_oneplus_matches_as_prefix();
+    test_oneplus_matches_as_suffix();
+    test_oneplus_matches_as_infix();
+
+    test_charset_matches();
+    test_charset_no_match();
+    test_charset_empty_no_match();
+
+    test_range_start_matches();
+    test_range_mid_matches();
+    test_range_end_matches();
+    test_range_no_match();
+
+    test_choice_one_literal_matches();
+    test_choice_one_literal_no_match();
+    test_choice_two_literals_first();
+    test_choice_three_literals_second();
+    test_choice_four_literals_last();
+    test_choice_two_literals_not_both();
+    test_choice_three_literals_not_both();
+    test_choice_followed_by_literal_match();
+    test_choice_followed_by_literal_no_match();
+    test_choice_empty_no_match();
+
+    cout << "All tests passed!" << endl;
 }
