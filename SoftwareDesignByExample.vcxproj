@@ -165,6 +165,7 @@
     <ClCompile Include="FindDuplicateFiles.cpp" />
     <ClCompile Include="MatchingPatterns.cpp" />
     <ClCompile Include="ObjectsAndClasses.cpp" />
+    <ClCompile Include="ParsingText.cpp" />
     <ClCompile Include="_Main.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
