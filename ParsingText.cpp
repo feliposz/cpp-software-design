@@ -5,6 +5,7 @@
 #include <assert.h>
 #include <iostream>
 #include <vector>
+#include "MatchingPatterns.h"
 
 using namespace std;
 
@@ -81,6 +82,44 @@ struct Tokenizer
     }
 };
 
+struct Parser
+{
+    Tokenizer tokenizer;
+
+    Match *parse(string text)
+    {
+        vector<Token*> *tokens = tokenizer.tokenize(text);
+        return _parse(*tokens);
+    }
+
+    Match *_parse(vector<Token*> &tokens, int start = 0)
+    {
+        if (start >= tokens.size())
+        {
+            return NULL_MATCH;
+        }
+        else if (tokens[start]->type == TT_Any)
+        {
+            return new Any(_parse(tokens, start + 1));
+        }
+        else if (tokens[start]->type == TT_EitherStart)
+        {
+            Token *left = tokens[start + 1];
+            Token *right = tokens[start + 2];
+            Token *end = tokens[start + 3];
+            if (tokens.size() - start < 3 || left->type != TT_Literal || right->type != TT_Literal || end->type != TT_EitherEnd)
+            {
+                throw new exception("badly-formatted Either");
+            }
+            return new Either(new Lit(left->text), new Lit(right->text), _parse(tokens, start + 4));
+        }
+        else if (tokens[start]->type == TT_Literal)
+        {
+            return new Lit(tokens[start]->text, _parse(tokens, start + 1));
+        }
+    }
+};
+
 bool compare_tokens(vector<Token*> &a, vector<Token*> &b)
 {
     if (a.size() != b.size())
@@ -95,6 +134,52 @@ bool compare_tokens(vector<Token*> &a, vector<Token*> &b)
         }
     }
     return true;
+}
+
+bool compare_match(Match *a, Match *b)
+{
+    {
+        Null* _a = dynamic_cast<Null*>(a);
+        Null* _b = dynamic_cast<Null*>(b);
+        if (_a && _b)
+        {
+            return true;
+        }
+    }
+    {
+        Lit* _a = dynamic_cast<Lit*>(a);
+        Lit* _b = dynamic_cast<Lit*>(b);
+        if (_a && _b)
+        {
+            return _a->chars == _b->chars && compare_match(_a->rest, _b->rest);
+        }
+    }
+    {
+        Any* _a = dynamic_cast<Any*>(a);
+        Any* _b = dynamic_cast<Any*>(b);
+        if (_a && _b)
+        {
+            return compare_match(_a->rest, _b->rest);
+        }
+    }
+    {
+        Either* _a = dynamic_cast<Either*>(a);
+        Either* _b = dynamic_cast<Either*>(b);
+        if (_a && _b)
+        {
+            return compare_match(_a->left, _b->left)
+                && compare_match(_a->right, _b->right)
+                && compare_match(_a->rest, _b->rest);
+        }
+    }
+    return false;
+
+    /*
+    Choice
+    OnePlus
+    Charset
+    Range
+    */
 }
 
 void test_tok_empty_string()
@@ -115,12 +200,20 @@ void test_tok_any_either()
     assert(compare_tokens(*result, expected));
 }
 
+void test_parse_either_two_lit()
+{
+    Match *result = (new Parser())->parse("{abc,def}");
+    Match *expected = new Either(new Lit("abc"), new Lit("def"));
+    assert(compare_match(result, expected));
+}
+
 void parsing_main()
 {
     cout << "Parsing Text:" << endl;
 
     test_tok_empty_string();
     test_tok_any_either();
+    test_parse_either_two_lit();
 
     cout << "All tests passed!" << endl;
 }
