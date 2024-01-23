@@ -16,6 +16,8 @@ enum TokenType
     TT_Any,
     TT_EitherStart,
     TT_EitherEnd,
+    TT_CharsetStart,
+    TT_CharsetEnd,
 };
 
 struct Token
@@ -50,9 +52,19 @@ struct Tokenizer
 
     vector<Token*> *tokenize(string text)
     {
+        bool escape_next = false;
         for (const auto ch : text)
         {
-            if (ch == '*')
+            if (escape_next)
+            {
+                current += ch;
+                escape_next = false;
+            }
+            else if (ch == '\\')
+            {
+                escape_next = true;
+            }
+            else if (ch == '*')
             {
                 add(TT_Any);
             }
@@ -63,6 +75,14 @@ struct Tokenizer
             else if (ch == '}')
             {
                 add(TT_EitherEnd);
+            }
+            else if (ch == '[')
+            {
+                add(TT_CharsetStart);
+            }
+            else if (ch == ']')
+            {
+                add(TT_CharsetEnd);
             }
             else if (ch == ',')
             {
@@ -112,6 +132,16 @@ struct Parser
                 throw new exception("badly-formatted Either");
             }
             return new Either(new Lit(left->text), new Lit(right->text), _parse(tokens, start + 4));
+        }
+        else if (tokens[start]->type == TT_CharsetStart)
+        {
+            Token *chars = tokens[start + 1];
+            Token *end = tokens[start + 2];
+            if (tokens.size() - start < 2 || chars->type != TT_Literal || end->type != TT_CharsetEnd)
+            {
+                throw new exception("badly-formatted Charset");
+            }
+            return new Charset(chars->text, _parse(tokens, start + 3));
         }
         else if (tokens[start]->type == TT_Literal)
         {
@@ -172,12 +202,19 @@ bool compare_match(Match *a, Match *b)
                 && compare_match(_a->rest, _b->rest);
         }
     }
+    {
+        Charset* _a = dynamic_cast<Charset*>(a);
+        Charset* _b = dynamic_cast<Charset*>(b);
+        if (_a && _b)
+        {
+            return _a->charset == _b->charset && compare_match(_a->rest, _b->rest);
+        }
+    }
     return false;
 
     /*
     Choice
     OnePlus
-    Charset
     Range
     */
 }
@@ -200,10 +237,31 @@ void test_tok_any_either()
     assert(compare_tokens(*result, expected));
 }
 
+void test_tok_escape()
+{
+    vector<Token*> *result = (new Tokenizer())->tokenize("\\*{abc,def}\\{xyz\\}");
+    vector<Token*> expected = {
+        new Token(TT_Literal, "*"),
+        new Token(TT_EitherStart),
+        new Token(TT_Literal, "abc"),
+        new Token(TT_Literal, "def"),
+        new Token(TT_EitherEnd),
+        new Token(TT_Literal, "{xyz}"),
+    };
+    assert(compare_tokens(*result, expected));
+}
+
 void test_parse_either_two_lit()
 {
     Match *result = (new Parser())->parse("{abc,def}");
     Match *expected = new Either(new Lit("abc"), new Lit("def"));
+    assert(compare_match(result, expected));
+}
+
+void test_parse_charset()
+{
+    Match *result = (new Parser())->parse("[abc]");
+    Match *expected = new Charset("abc");
     assert(compare_match(result, expected));
 }
 
@@ -213,7 +271,9 @@ void parsing_main()
 
     test_tok_empty_string();
     test_tok_any_either();
+    test_tok_escape();
     test_parse_either_two_lit();
+    test_parse_charset();
 
     cout << "All tests passed!" << endl;
 }
