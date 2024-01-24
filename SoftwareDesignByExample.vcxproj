@@ -166,6 +166,7 @@
     <ClCompile Include="MatchingPatterns.cpp" />
     <ClCompile Include="ObjectsAndClasses.cpp" />
     <ClCompile Include="ParsingText.cpp" />
+    <ClCompile Include="RunningTests.cpp" />
     <ClCompile Include="_Main.cpp" />
   </ItemGroup>
   <ItemGroup>
