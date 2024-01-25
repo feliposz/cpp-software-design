@@ -111,6 +111,17 @@ int eval_leq(json &expr, map<string, int> &env)
     return left <= right;
 }
 
+int eval_while(json &expr, map<string, int> &env)
+{
+    assert(expr.size() == 3);
+    int result = 0;
+    while (eval(expr[1], env))
+    {
+        result = eval(expr[2], env);
+    }
+    return 0;
+}
+
 map<string, int(*)(json&, map<string, int>&)> ops = {
     { "abs", eval_abs },
     { "add", eval_add },
@@ -121,6 +132,7 @@ map<string, int(*)(json&, map<string, int>&)> ops = {
     { "repeat", eval_repeat },
     { "if", eval_if},
     { "leq", eval_leq},
+    { "while", eval_while},
 };
 
 int eval(json &expr, map<string, int> &env)
@@ -187,6 +199,27 @@ void interpreter_main()
                             ["print", "small", ["get", "a"]],
                             ["print", "large", ["get", "a"]]
                         ]
+                    ]
+                ]
+            ]
+        )");
+        int result = eval(program, env);
+        cout << "=> " << result << endl;
+    }
+
+    {
+        map<string, int> env;
+        auto program = json::parse(R"(
+            [
+                "seq",
+                ["set", "a", -5],
+                ["print", "initial", ["get", "a"]],
+                [
+                    "while", ["leq", ["get", "a"], 5],
+                    [
+                        "seq",
+                        ["set", "a", ["add", ["get", "a"], 1]],
+                        ["print", "a =", ["get", "a"]]
                     ]
                 ]
             ]
