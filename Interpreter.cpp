@@ -11,16 +11,16 @@
 using json = nlohmann::json;
 using namespace std;
 
-int eval(json &expr, map<string, int> &env);
+json eval(json &expr, map<string, int> &env);
 
-int eval_abs(json &expr, map<string, int> &env)
+json eval_abs(json &expr, map<string, int> &env)
 {
     assert(expr.size() == 2);
     int val = eval(expr[1], env);
     return abs(val);
 }
 
-int eval_add(json &expr, map<string, int> &env)
+json eval_add(json &expr, map<string, int> &env)
 {
     assert(expr.size() == 3);
     int left = eval(expr[1], env);
@@ -28,7 +28,7 @@ int eval_add(json &expr, map<string, int> &env)
     return left + right;
 }
 
-int eval_get(json &expr, map<string, int> &env)
+json eval_get(json &expr, map<string, int> &env)
 {
     assert(expr.size() == 2);
     assert(expr[1].is_string());
@@ -37,7 +37,7 @@ int eval_get(json &expr, map<string, int> &env)
     return env[identifier];
 }
 
-int eval_set(json &expr, map<string, int> &env)
+json eval_set(json &expr, map<string, int> &env)
 {
     assert(expr.size() == 3);
     assert(expr[1].is_string());
@@ -47,7 +47,7 @@ int eval_set(json &expr, map<string, int> &env)
     return value;
 }
 
-int eval_seq(json &expr, map<string, int> &env)
+json eval_seq(json &expr, map<string, int> &env)
 {
     assert(expr.size() > 1);
     int result = 0;
@@ -58,7 +58,7 @@ int eval_seq(json &expr, map<string, int> &env)
     return result;
 }
 
-int eval_print(json &expr, map<string, int> &env)
+json eval_print(json &expr, map<string, int> &env)
 {
     assert(expr.size() > 1);
     for (int i = 1; i < expr.size(); i++)
@@ -77,7 +77,7 @@ int eval_print(json &expr, map<string, int> &env)
     return 0;
 }
 
-int eval_repeat(json &expr, map<string, int> &env)
+json eval_repeat(json &expr, map<string, int> &env)
 {
     assert(expr.size() == 3);
     assert(expr[1].is_number_integer());
@@ -90,10 +90,10 @@ int eval_repeat(json &expr, map<string, int> &env)
     return 0;
 }
 
-int eval_if(json &expr, map<string, int> &env)
+json eval_if(json &expr, map<string, int> &env)
 {
     assert(expr.size() == 4);
-    if (eval(expr[1], env))
+    if (eval(expr[1], env).get<int>())
     {
         return eval(expr[2], env);
     }
@@ -103,7 +103,7 @@ int eval_if(json &expr, map<string, int> &env)
     }
 }
 
-int eval_leq(json &expr, map<string, int> &env)
+json eval_leq(json &expr, map<string, int> &env)
 {
     assert(expr.size() == 3);
     int left = eval(expr[1], env);
@@ -111,18 +111,18 @@ int eval_leq(json &expr, map<string, int> &env)
     return left <= right;
 }
 
-int eval_while(json &expr, map<string, int> &env)
+json eval_while(json &expr, map<string, int> &env)
 {
     assert(expr.size() == 3);
     int result = 0;
-    while (eval(expr[1], env))
+    while (eval(expr[1], env).get<int>())
     {
         result = eval(expr[2], env);
     }
     return 0;
 }
 
-map<string, int(*)(json&, map<string, int>&)> ops = {
+map<string, json(*)(json&, map<string, int>&)> ops = {
     { "abs", eval_abs },
     { "add", eval_add },
     { "seq", eval_seq },
@@ -135,7 +135,7 @@ map<string, int(*)(json&, map<string, int>&)> ops = {
     { "while", eval_while},
 };
 
-int eval(json &expr, map<string, int> &env)
+json eval(json &expr, map<string, int> &env)
 {
     if (expr.is_number_integer())
     {
