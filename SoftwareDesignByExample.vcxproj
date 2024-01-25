@@ -109,7 +109,7 @@
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalIncludeDirectories>V:\GitHub\_others\vcpkg\packages\openssl_x64-windows\include\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>V:\GitHub\_others\vcpkg\packages\nlohmann-json_x64-windows\include;V:\GitHub\_others\vcpkg\packages\openssl_x64-windows\include\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -150,7 +150,7 @@
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalIncludeDirectories>V:\GitHub\_others\vcpkg\packages\openssl_x64-windows\include\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>V:\GitHub\_others\vcpkg\packages\nlohmann-json_x64-windows\include;V:\GitHub\_others\vcpkg\packages\openssl_x64-windows\include\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -163,6 +163,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="FindDuplicateFiles.cpp" />
+    <ClCompile Include="Interpreter.cpp" />
     <ClCompile Include="MatchingPatterns.cpp" />
     <ClCompile Include="ObjectsAndClasses.cpp" />
     <ClCompile Include="ParsingText.cpp" />

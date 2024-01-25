@@ -35,6 +35,16 @@ In *Project Properties -> Debugging > Environment*:
 
 	PATH=%PATH%;...\vcpkg\packages\openssl_x64-windows\bin\
 
+## nlohmann's JSON library
+
+Installation:
+
+  vcpkg install nlohmann-json
+  
+In *Project Properties -> C/C++ -> General -> Additional Include Directories*:
+
+  ...\vcpkg\packages\nlohmann-json_x64-windows\include  
+
 ## References:
 
 - https://stackoverflow.com/questions/32156336/how-to-include-openssl-in-visual-studio
