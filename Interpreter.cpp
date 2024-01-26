@@ -1,6 +1,7 @@
-// Inspired by Chapter 7: An Interpreter
+// Inspired by Chapter 7: An Interpreter and Chapter 8: Functions and Closures
 // From the book: Software Design by Example
 // https://third-bit.com/sdxpy/interp/
+// https://third-bit.com/sdxpy/func/
 
 #include <assert.h>
 #include <iostream>
@@ -11,16 +12,18 @@
 using json = nlohmann::json;
 using namespace std;
 
-json eval(json &expr, map<string, int> &env);
+typedef map<string, json> environment;
 
-json eval_abs(json &expr, map<string, int> &env)
+json eval(json &expr, environment &env);
+
+json eval_abs(json &expr, environment &env)
 {
     assert(expr.size() == 2);
     int val = eval(expr[1], env);
     return abs(val);
 }
 
-json eval_add(json &expr, map<string, int> &env)
+json eval_add(json &expr, environment &env)
 {
     assert(expr.size() == 3);
     int left = eval(expr[1], env);
@@ -28,7 +31,7 @@ json eval_add(json &expr, map<string, int> &env)
     return left + right;
 }
 
-json eval_get(json &expr, map<string, int> &env)
+json eval_get(json &expr, environment &env)
 {
     assert(expr.size() == 2);
     assert(expr[1].is_string());
@@ -37,20 +40,20 @@ json eval_get(json &expr, map<string, int> &env)
     return env[identifier];
 }
 
-json eval_set(json &expr, map<string, int> &env)
+json eval_set(json &expr, environment &env)
 {
     assert(expr.size() == 3);
     assert(expr[1].is_string());
     string identifier = expr[1].get<string>();
-    int value = eval(expr[2], env);
+    json value = eval(expr[2], env);
     env[identifier] = value;
     return value;
 }
 
-json eval_seq(json &expr, map<string, int> &env)
+json eval_seq(json &expr, environment &env)
 {
     assert(expr.size() > 1);
-    int result = 0;
+    json result;
     for (int i = 1; i < expr.size(); i++)
     {
         result = eval(expr[i], env);
@@ -58,7 +61,7 @@ json eval_seq(json &expr, map<string, int> &env)
     return result;
 }
 
-json eval_print(json &expr, map<string, int> &env)
+json eval_print(json &expr, environment &env)
 {
     assert(expr.size() > 1);
     for (int i = 1; i < expr.size(); i++)
@@ -74,23 +77,24 @@ json eval_print(json &expr, map<string, int> &env)
         cout << " ";
     }
     cout << endl;
-    return 0;
+    json result;
+    return result;
 }
 
-json eval_repeat(json &expr, map<string, int> &env)
+json eval_repeat(json &expr, environment &env)
 {
     assert(expr.size() == 3);
     assert(expr[1].is_number_integer());
     int countdown = expr[1].get<int>();
-    int result = 0;
+    json result;
     while (countdown-- > 0)
     {
         result = eval(expr[2], env);
     }
-    return 0;
+    return result;
 }
 
-json eval_if(json &expr, map<string, int> &env)
+json eval_if(json &expr, environment &env)
 {
     assert(expr.size() == 4);
     if (eval(expr[1], env).get<int>())
@@ -103,7 +107,7 @@ json eval_if(json &expr, map<string, int> &env)
     }
 }
 
-json eval_leq(json &expr, map<string, int> &env)
+json eval_leq(json &expr, environment &env)
 {
     assert(expr.size() == 3);
     int left = eval(expr[1], env);
@@ -111,7 +115,7 @@ json eval_leq(json &expr, map<string, int> &env)
     return left <= right;
 }
 
-json eval_while(json &expr, map<string, int> &env)
+json eval_while(json &expr, environment &env)
 {
     assert(expr.size() == 3);
     int result = 0;
@@ -122,7 +126,38 @@ json eval_while(json &expr, map<string, int> &env)
     return 0;
 }
 
-map<string, json(*)(json&, map<string, int>&)> ops = {
+json eval_func(json &expr, environment &env)
+{
+    assert(expr.size() == 3);
+    return expr;
+}
+
+json eval_call(json &expr, environment &env)
+{
+    assert(expr.size() > 2);
+    assert(expr[1].is_string());
+    string name = expr[1];
+    vector<json> values;
+    for (int i = 2; i < expr.size(); i++)
+    {
+        values.push_back(eval(expr[i], env));
+    }
+    if (env.count(name) && env[name].is_array() && env[name][0] == "func")
+    {
+        auto params = env[name][1];
+        auto body = env[name][2];
+        assert(values.size() == params.size());
+        environment tmp;
+        for (int i = 0; i < params.size(); i++)
+        {
+            tmp[params[i]] = values[i];
+        }
+        return eval(body, tmp);
+    }
+    assert(!"unknown function");
+}
+
+map<string, json(*)(json&, environment&)> ops = {
     { "abs", eval_abs },
     { "add", eval_add },
     { "seq", eval_seq },
@@ -133,9 +168,11 @@ map<string, json(*)(json&, map<string, int>&)> ops = {
     { "if", eval_if},
     { "leq", eval_leq},
     { "while", eval_while},
+    { "func", eval_func},
+    { "call", eval_call},
 };
 
-json eval(json &expr, map<string, int> &env)
+json eval(json &expr, environment &env)
 {
     if (expr.is_number_integer())
     {
@@ -149,7 +186,7 @@ json eval(json &expr, map<string, int> &env)
 
     if (ops.count(op))
     {
-        int result = ops[op](expr, env);
+        json result = ops[op](expr, env);
         //cout << "\t[DEBUG]\top = " << op << "\tresult = " << result << endl;
         return result;
     }
@@ -162,14 +199,14 @@ void interpreter_main()
     cout << "Interpreter" << endl;
 
     {
-        map<string, int> env;
+        environment env;
         auto program = json::parse(R"(["add", ["abs", -3], 2])");
-        int result = eval(program, env);
+        json result = eval(program, env);
         cout << "=> " << result << endl;
     }
 
     {
-        map<string, int> env;
+        environment env;
         auto program = json::parse(R"(
             [
                 "seq",
@@ -178,12 +215,12 @@ void interpreter_main()
                 ["add", ["get", "alpha"], ["get", "beta"]]
             ]
         )");
-        int result = eval(program, env);
+        json result = eval(program, env);
         cout << "=> " << result << endl;
     }
 
     {
-        map<string, int> env;
+        environment env;
         auto program = json::parse(R"(
             [
                 "seq",
@@ -203,12 +240,12 @@ void interpreter_main()
                 ]
             ]
         )");
-        int result = eval(program, env);
+        json result = eval(program, env);
         cout << "=> " << result << endl;
     }
 
     {
-        map<string, int> env;
+        environment env;
         auto program = json::parse(R"(
             [
                 "seq",
@@ -224,7 +261,27 @@ void interpreter_main()
                 ]
             ]
         )");
-        int result = eval(program, env);
+        json result = eval(program, env);
+        cout << "=> " << result << endl;
+    }
+
+    {
+        environment env;
+        auto program = json::parse(R"(
+            ["seq",
+              ["set", "double",
+                ["func", ["num"],
+                  ["add", ["get", "num"], ["get", "num"]]
+                ]
+              ],
+              ["set", "a", 1],
+              ["repeat", 4, ["seq",
+                ["set", "a", ["call", "double", ["get", "a"]]],
+                ["print", ["get", "a"]]
+              ]]
+            ]
+        )");
+        json result = eval(program, env);
         cout << "=> " << result << endl;
     }
 }
