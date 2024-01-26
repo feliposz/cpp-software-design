@@ -12,7 +12,50 @@
 using json = nlohmann::json;
 using namespace std;
 
-typedef map<string, json> environment;
+struct environment
+{
+    vector<map<string, json>> stack;
+
+    environment()
+    {
+        push();
+    }
+
+    void push()
+    {
+        stack.push_back({});
+    }
+
+    void pop()
+    {
+        stack.pop_back();
+    }
+
+    void set(string identifier, json value)
+    {
+        for (auto s = stack.rbegin(); s != stack.rend(); s++)
+        {
+            if ((*s).count(identifier))
+            {
+                (*s)[identifier] = value;
+                return;
+            }
+        }
+        stack.back()[identifier] = value;
+    };
+
+    json get(string identifier)
+    {
+        for (auto s = stack.rbegin(); s != stack.rend(); s++)
+        {
+            if ((*s).count(identifier))
+            {
+                return (*s)[identifier];
+            }
+        }
+        assert(!"undeclared");
+    }
+};
 
 json eval(json &expr, environment &env);
 
@@ -36,8 +79,7 @@ json eval_get(json &expr, environment &env)
     assert(expr.size() == 2);
     assert(expr[1].is_string());
     string identifier = expr[1].get<string>();
-    assert(env.count(identifier) > 0);
-    return env[identifier];
+    return env.get(identifier);
 }
 
 json eval_set(json &expr, environment &env)
@@ -46,7 +88,7 @@ json eval_set(json &expr, environment &env)
     assert(expr[1].is_string());
     string identifier = expr[1].get<string>();
     json value = eval(expr[2], env);
-    env[identifier] = value;
+    env.set(identifier, value);
     return value;
 }
 
@@ -118,12 +160,12 @@ json eval_leq(json &expr, environment &env)
 json eval_while(json &expr, environment &env)
 {
     assert(expr.size() == 3);
-    int result = 0;
+    json result;
     while (eval(expr[1], env).get<int>())
     {
         result = eval(expr[2], env);
     }
-    return 0;
+    return result;
 }
 
 json eval_func(json &expr, environment &env)
@@ -142,17 +184,20 @@ json eval_call(json &expr, environment &env)
     {
         values.push_back(eval(expr[i], env));
     }
-    if (env.count(name) && env[name].is_array() && env[name][0] == "func")
+    json func = env.get(name);
+    if (func.is_array() && func[0] == "func")
     {
-        auto params = env[name][1];
-        auto body = env[name][2];
+        auto params = func[1];
+        auto body = func[2];
         assert(values.size() == params.size());
-        environment tmp;
+        env.push();
         for (int i = 0; i < params.size(); i++)
         {
-            tmp[params[i]] = values[i];
+            env.set(params[i], values[i]);
         }
-        return eval(body, tmp);
+        json result = eval(body, env);
+        env.pop();
+        return result;
     }
     assert(!"unknown function");
 }
