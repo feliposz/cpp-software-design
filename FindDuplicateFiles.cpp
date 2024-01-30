@@ -100,7 +100,7 @@ void duplicate_no_hash()
 
 const int HASH_BUCKETS = 27;
 
-int naive_hash(string filename)
+int naive_hash(const string &filename)
 {
     ifstream file(filename, ios_base::binary);
     int hash = 0;
@@ -172,7 +172,7 @@ void duplicate_with_naive_hash()
 int histogram[256];
 
 // Based on: https://stackoverflow.com/questions/2262386/generate-sha256-with-openssl-and-c/10632725
-string sha_hash(string filename)
+string sha_hash(const string &filename)
 {
     ifstream file(filename, ios_base::binary);
     

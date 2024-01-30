@@ -162,6 +162,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="FileArchiver.cpp" />
     <ClCompile Include="FindDuplicateFiles.cpp" />
     <ClCompile Include="Interpreter.cpp" />
     <ClCompile Include="MatchingPatterns.cpp" />

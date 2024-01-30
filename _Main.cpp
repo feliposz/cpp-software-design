@@ -4,6 +4,7 @@ void matching_main();
 void parsing_main();
 void tests_main();
 void interpreter_main();
+void archiver_main();
 
 int main()
 {
@@ -12,6 +13,7 @@ int main()
     //matching_main();
     //parsing_main();
     //tests_main();
-    interpreter_main();
+    //interpreter_main();
+    archiver_main();
     return 0;
 }
