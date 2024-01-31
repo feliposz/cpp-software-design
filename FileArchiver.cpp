@@ -1,3 +1,7 @@
+// Inspired by Chapter 10: A File Archiver
+// From the book: Software Design by Example
+// https://third-bit.com/sdxpy/archive/
+
 #include <assert.h>
 #include <time.h>
 #include <iostream>
