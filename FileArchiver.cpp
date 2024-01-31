@@ -35,13 +35,24 @@ void hash_all(vector<file_hash> &result, const string &root)
     }
 }
 
-void write_manifest(const string &target, char *timestamp_str, vector<file_hash> &manifest, string &manifest_filename)
+string current_timestamp()
+{
+    time_t timestamp = time(0);
+    char timestamp_str[80];
+    struct tm timeinfo;
+    localtime_s(&timeinfo, &timestamp);
+    strftime(timestamp_str, 80, "%Y%m%d_%H%M%S", &timeinfo);
+    string result(timestamp_str);
+    return result;
+}
+
+void write_manifest(const string &target, vector<file_hash> &manifest, string &manifest_filename)
 {
     if (!filesystem::exists(target))
     {
         filesystem::create_directory(target);
     }
-    manifest_filename = target + '\\' + timestamp_str + ".csv";
+    manifest_filename = target + '\\' + current_timestamp() + ".csv";
     ofstream out(manifest_filename);
     out << "filename,hash" << endl;
     for (const auto &fh : manifest)
@@ -49,6 +60,29 @@ void write_manifest(const string &target, char *timestamp_str, vector<file_hash>
         out << fh.filename << "," << fh.hash << endl;
     }
     out.close();
+}
+
+void read_manifest(vector<file_hash> &manifest, const string &manifest_filepath)
+{
+    ifstream in(manifest_filepath);
+    if (in.is_open())
+    {
+        string line;
+        in >> line;
+        assert(line == "filename,hash");
+        while (true)
+        {
+            in >> line;
+            if (in.eof())
+            {
+                break;
+            }
+            string filename = line.substr(0, line.find(","));
+            string hash = line.substr(line.find(",") + 1);
+            manifest.push_back({ filename, hash });
+        }
+        in.close();
+    }
 }
 
 void copy_files(const string &source, const string &target, vector<file_hash> &manifest)
@@ -64,15 +98,51 @@ void copy_files(const string &source, const string &target, vector<file_hash> &m
     }
 }
 
+void compare_manifest(const vector<file_hash> &left, const vector<file_hash> &right, vector<string> &changelog)
+{
+    map<string, string> left_file2hash, left_hash2file, right_file2hash, right_hash2file;
+
+    for (const auto &left_fh : left)
+    {
+        left_file2hash[left_fh.filename] = left_fh.hash;
+        left_hash2file[left_fh.hash] = left_fh.filename;
+    }
+
+    for (const auto &right_fh : right)
+    {
+        right_file2hash[right_fh.filename] = right_fh.hash;
+        right_hash2file[right_fh.hash] = right_fh.filename;
+    }
+
+    for (const auto &left_fh : left)
+    {
+        if (right_file2hash.count(left_fh.filename) == 0 && right_hash2file.count(left_fh.hash) == 0)
+        {
+            changelog.push_back(left_fh.filename + " deleted");
+        }
+        else if (right_file2hash.count(left_fh.filename) && right_file2hash[left_fh.filename] != left_fh.hash)
+        {
+            changelog.push_back(left_fh.filename + " updated");
+        }
+        else if (right_hash2file.count(left_fh.hash) && right_hash2file[left_fh.hash] != left_fh.filename)
+        {
+            changelog.push_back(left_fh.filename + " renamed to " + right_hash2file[left_fh.hash]);
+        }
+    }
+
+    for (const auto &right_fh : right)
+    {
+        if (left_file2hash.count(right_fh.filename) == 0 && left_hash2file.count(right_fh.hash) == 0)
+        {
+            changelog.push_back(right_fh.filename + " added");
+        }
+    }
+}
+
 void backup(const string &source, const string &target, vector<file_hash> &manifest, string &manifest_filename)
 {
     hash_all(manifest, source);
-    time_t timestamp = time(0);
-    char timestamp_str[80];
-    struct tm timeinfo;
-    localtime_s(&timeinfo, &timestamp);
-    strftime(timestamp_str, 80, "%Y%m%d_%H%M%S", &timeinfo);
-    write_manifest(target, timestamp_str, manifest, manifest_filename);
+    write_manifest(target, manifest, manifest_filename);
     copy_files(source, target, manifest);
 }
 
@@ -187,6 +257,16 @@ void test_backup()
     test_teardown();
 }
 
+void test_compare_manifest()
+{
+    vector<file_hash> original = { { "a.txt", "aaa" }, { "b.txt", "bbb" }, { "sub_dir\\c.txt", "ccc" }, { "unchanged.txt", "unchanged" } };
+    vector<file_hash> changed = { { "a.txt", "XXX" }, { "Y.txt", "bbb" }, { "d.txt", "ddd" }, { "unchanged.txt", "unchanged" } };
+    vector<string> expect = { "a.txt updated", "b.txt renamed to Y.txt", "sub_dir\\c.txt deleted", "d.txt added" };
+    vector<string> changelog;
+    compare_manifest(original, changed, changelog);
+    assert(changelog == expect);
+}
+
 void archiver_main()
 {
     cout << "File Archiver:" << endl;
@@ -197,6 +277,7 @@ void archiver_main()
     test_hashing();
     test_change();
     test_backup();
+    test_compare_manifest();
 
     cout << "All tests passed" << endl;
 }
