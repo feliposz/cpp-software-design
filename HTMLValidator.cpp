@@ -179,6 +179,180 @@ void catalog_html_document(const string &data)
     }
 }
 
+class HTMLVisitor
+{
+public:
+    htmlParserCtxtPtr parser;
+    xmlNode *root;
+
+    HTMLVisitor(const string &data)
+    {
+        parser = htmlCreateMemoryParserCtxt(data.c_str(), data.length());
+        if (!parser)
+        {
+            fprintf(stderr, "error creating context\n");
+            exit(1);
+        }
+        htmlCtxtUseOptions(parser, HTML_PARSE_NOBLANKS | HTML_PARSE_NOERROR | HTML_PARSE_NOWARNING | HTML_PARSE_NONET);
+        htmlParseDocument(parser);
+        root = xmlDocGetRootElement(parser->myDoc);
+        if (!root)
+        {
+            htmlFreeParserCtxt(parser);
+            fprintf(stderr, "empty document\n");
+            exit(1);
+        }
+    }
+
+    ~HTMLVisitor()
+    {
+        if (root)
+        {
+            xmlFree(root);
+        }
+        if (parser)
+        {
+            htmlFreeParserCtxt(parser);
+        }
+    }
+
+    void visit()
+    {
+        visit(root);
+    }
+
+    void visit(xmlNode *node)
+    {
+        if (node->type == XML_TEXT_NODE)
+        {
+            text(node);
+        }
+        else if (node->type == XML_ELEMENT_NODE)
+        {
+            tag_enter(node);
+            for (xmlNode *child = node->children; child; child = child->next)
+            {
+                visit(child);
+            }
+            tag_exit(node);
+        }
+    }
+
+    virtual void tag_enter(xmlNode *node) {}
+
+    virtual void tag_exit(xmlNode *node) {}
+
+    virtual void text(xmlNode *node) {}
+};
+
+class DisplayVisitor : public HTMLVisitor
+{
+public:
+    DisplayVisitor(const string &data) : HTMLVisitor(data)
+    {
+    }
+
+    void tag_enter(xmlNode *node) override
+    {
+        printf("Element: %s", node->name);
+        for (xmlAttr *attr = node->properties; attr; attr = attr->next)
+        {
+            printf(attr == node->properties ? " {" : ", ");
+            printf("'%s'", attr->name);
+            /*
+            for (xmlNode *attr_child = attr->children; attr_child; attr_child = attr_child->next)
+            {
+                walk_html_tree(attr_child, depth + 1, true);
+            }
+            */
+        }
+        if (node->properties)
+        {
+            printf("}");
+        }
+        printf("\n");
+    }
+
+    void text(xmlNode *node) override
+    {
+        printf("Text: '");
+        for (xmlChar *c = node->content; *c; c++)
+        {
+            if (*c == '\n')
+            {
+                printf("\\n");
+            }
+            else if (*c == '\r')
+            {
+                printf("\\r");
+            }
+            else if (*c == '\t')
+            {
+                printf("\\t");
+            }
+            else if (*c == ' ')
+            {
+                printf("_");
+            }
+            else
+            {
+                putchar(*c);
+            }
+        }
+        printf("'\n");
+    }
+};
+
+class CatalogVisitor : public HTMLVisitor
+{
+    map<string, set<string>> catalog;
+
+public:
+
+    CatalogVisitor(const string &data) : HTMLVisitor(data)
+    {
+    }
+
+    void tag_enter(xmlNode *node) override
+    {
+        string node_name((char *)node->name);
+        if (catalog.count(node_name) == 0)
+        {
+            catalog[node_name] = {};
+        }
+        for (xmlNode *child = node->children; child; child = child->next)
+        {
+            if (child->type == XML_ELEMENT_NODE)
+            {
+                string child_name((char *)child->name);
+                catalog[node_name].emplace(child_name);
+            }
+        }
+    }
+
+    void display_catalog()
+    {
+        for (const auto &elem : catalog)
+        {
+            cout << elem.first << ": ";
+            bool is_first_child = true;
+            for (const auto &child : elem.second)
+            {
+                if (is_first_child)
+                {
+                    is_first_child = false;
+                }
+                else
+                {
+                    cout << ", ";
+                }
+                cout << child;
+            }
+            cout << endl;
+        }
+    }
+};
+
 void test_parsing()
 {
     parse_html_document(R"(
@@ -210,10 +384,50 @@ void test_catalog()
     )");
 }
 
+void test_display_visitor()
+{
+    cout << "DisplayVisitor:" << endl;
+    DisplayVisitor dv(R"(
+        <html lang="en">
+        <body class="outline narrow">
+        <h1>Title</h1>
+        <p align="left" align="right">paragraph</p>
+        </body>
+        </html>
+    )");
+
+    dv.visit();
+}
+
+void test_catalog_visitor()
+{
+    cout << "CatalogVisitor:" << endl;
+    CatalogVisitor cv(R"(
+        <html>
+          <head>
+            <title>Software Design by Example</title>
+          </head>
+          <body>
+            <h1>Main Title</h1>
+            <p>introductory paragraph</p>
+            <ul>
+              <li>first item</li>
+              <li>second item is <em>emphasized</em></li>
+            </ul>
+          </body>
+        </html>
+    )");
+
+    cv.visit();
+    cv.display_catalog();
+}
+
 void validator_main()
 {
     LIBXML_TEST_VERSION;
 
-    test_parsing();
-    test_catalog();
+    //test_parsing();
+    //test_catalog();
+    test_display_visitor();
+    test_catalog_visitor();
 }
