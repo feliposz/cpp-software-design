@@ -21,16 +21,16 @@ Instead of using Python, I've done it in ~~(very bad)~~ C++.
 In *Project Properties -> C/C++ -> General -> Additional Include Directories*:
 
 	...\vcpkg\packages\openssl_x64-windows\include
-	
+
 In *Project Properties -> Linker -> General -> Additional Library Directories*:
 
 	...\vcpkg\packages\openssl_x64-windows\lib
-	
+
 In *Project Properties -> Linker -> Input -> Additional Dependencies*
 
 	libcrypto.lib
 	libssl.lib
-	
+
 In *Project Properties -> Debugging > Environment*:
 
 	PATH=%PATH%;...\vcpkg\packages\openssl_x64-windows\bin\
@@ -40,10 +40,34 @@ In *Project Properties -> Debugging > Environment*:
 Installation:
 
   vcpkg install nlohmann-json
-  
+
 In *Project Properties -> C/C++ -> General -> Additional Include Directories*:
 
-  ...\vcpkg\packages\nlohmann-json_x64-windows\include  
+  ...\vcpkg\packages\nlohmann-json_x64-windows\include
+
+## LibXML
+
+Installation:
+
+  vcpkg install libxml2
+
+In *Project Properties -> C/C++ -> General -> Additional Include Directories*:
+
+  ...\vcpkg\packages\libxml2_x64-windows\include
+  ...\vcpkg\packages\libiconv_x64-windows\include
+
+In *Project Properties -> Linker -> General -> Additional Library Directories*:
+
+	...\vcpkg\packages\libxml2_x64-windows\lib
+
+In *Project Properties -> Linker -> Input -> Additional Dependencies*
+
+	libxml2.lib
+
+In *Project Properties -> Debugging > Environment*:
+
+	PATH=%PATH%;...\vcpkg\packages\openssl_x64-windows\bin\;...\vcpkg\packages\liblzma_x64-windows\bin;...\vcpkg\packages\zlib_x64-windows\bin\zlib1.dll;...\vcpkg\packages\libiconv_x64-windows\bin
+
 
 ## References:
 

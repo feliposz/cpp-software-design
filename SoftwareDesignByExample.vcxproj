@@ -109,13 +109,13 @@
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalIncludeDirectories>V:\GitHub\_others\vcpkg\packages\nlohmann-json_x64-windows\include;V:\GitHub\_others\vcpkg\packages\openssl_x64-windows\include\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>V:\GitHub\_others\vcpkg\packages\libiconv_x64-windows\include;V:\GitHub\_others\vcpkg\packages\nlohmann-json_x64-windows\include;V:\GitHub\_others\vcpkg\packages\openssl_x64-windows\include\;V:\GitHub\_others\vcpkg\packages\libxml2_x64-windows\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>V:\GitHub\_others\vcpkg\packages\openssl_x64-windows\lib</AdditionalLibraryDirectories>
-      <AdditionalDependencies>libcrypto.lib;libssl.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>V:\GitHub\_others\vcpkg\packages\libxml2_x64-windows\lib;V:\GitHub\_others\vcpkg\packages\openssl_x64-windows\lib</AdditionalLibraryDirectories>
+      <AdditionalDependencies>libcrypto.lib;libssl.lib;libxml2.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -150,20 +150,21 @@
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalIncludeDirectories>V:\GitHub\_others\vcpkg\packages\nlohmann-json_x64-windows\include;V:\GitHub\_others\vcpkg\packages\openssl_x64-windows\include\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>V:\GitHub\_others\vcpkg\packages\libiconv_x64-windows\include;V:\GitHub\_others\vcpkg\packages\nlohmann-json_x64-windows\include;V:\GitHub\_others\vcpkg\packages\openssl_x64-windows\include\;V:\GitHub\_others\vcpkg\packages\libxml2_x64-windows\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>V:\GitHub\_others\vcpkg\packages\openssl_x64-windows\lib</AdditionalLibraryDirectories>
-      <AdditionalDependencies>libcrypto.lib;libssl.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>V:\GitHub\_others\vcpkg\packages\libxml2_x64-windows\lib;V:\GitHub\_others\vcpkg\packages\openssl_x64-windows\lib</AdditionalLibraryDirectories>
+      <AdditionalDependencies>libcrypto.lib;libssl.lib;libxml2.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="FileArchiver.cpp" />
     <ClCompile Include="FindDuplicateFiles.cpp" />
+    <ClCompile Include="HTMLValidator.cpp" />
     <ClCompile Include="Interpreter.cpp" />
     <ClCompile Include="MatchingPatterns.cpp" />
     <ClCompile Include="ObjectsAndClasses.cpp" />
