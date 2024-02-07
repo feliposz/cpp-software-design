@@ -353,6 +353,56 @@ public:
     }
 };
 
+class CheckVisitor : public HTMLVisitor
+{
+    map<string, set<string>> manifest;
+    map<string, set<string>> errors;
+
+public:
+    CheckVisitor(const string &data, map<string, set<string>> manifest) : HTMLVisitor(data)
+    {
+        this->manifest = manifest;
+    }
+
+    void tag_enter(xmlNode *node) override
+    {
+        string node_name((char *)node->name);
+        for (xmlNode *child = node->children; child; child = child->next)
+        {
+            if (child->type == XML_ELEMENT_NODE)
+            {
+                string child_name((char *)child->name);
+                if (manifest[node_name].count(child_name) == 0)
+                {
+                    errors[node_name].emplace(child_name);
+                }
+            }
+        }
+    }
+
+    void display_errors()
+    {
+        for (const auto &elem : errors)
+        {
+            cout << elem.first << ": ";
+            bool is_first_child = true;
+            for (const auto &child : elem.second)
+            {
+                if (is_first_child)
+                {
+                    is_first_child = false;
+                }
+                else
+                {
+                    cout << ", ";
+                }
+                cout << child;
+            }
+            cout << endl;
+        }
+    }
+};
+
 void test_parsing()
 {
     parse_html_document(R"(
@@ -386,7 +436,7 @@ void test_catalog()
 
 void test_display_visitor()
 {
-    cout << "DisplayVisitor:" << endl;
+    cout << "\nDisplayVisitor:" << endl;
     DisplayVisitor dv(R"(
         <html lang="en">
         <body class="outline narrow">
@@ -401,7 +451,7 @@ void test_display_visitor()
 
 void test_catalog_visitor()
 {
-    cout << "CatalogVisitor:" << endl;
+    cout << "\nCatalogVisitor:" << endl;
     CatalogVisitor cv(R"(
         <html>
           <head>
@@ -422,6 +472,31 @@ void test_catalog_visitor()
     cv.display_catalog();
 }
 
+void test_check_visitor()
+{
+    cout << "\nCheckVisitor:" << endl;
+
+    CheckVisitor kv(R"(
+        <html>
+          <head>
+            <title>Software Design by Example</title>
+          </head>
+          <body>
+            <h1>Main Title</h1>
+            <p>introductory paragraph</p>
+            <ul>
+              <li>first item</li>
+              <li>second item is <em>emphasized</em></li>
+            </ul>
+          </body>
+        </html>
+    )", { { "body", {"section"} }, {"head", {"title"}}, {"html", {"body", "head"}}, {"section", {"h1", "p", "ul"}}, {"ul", {"li"}} });
+    // TODO: skipped the YAML loading of the manifest
+
+    kv.visit();
+    kv.display_errors();
+}
+
 void validator_main()
 {
     LIBXML_TEST_VERSION;
@@ -430,4 +505,5 @@ void validator_main()
     //test_catalog();
     test_display_visitor();
     test_catalog_visitor();
+    test_check_visitor();
 }
