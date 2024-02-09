@@ -9,6 +9,23 @@
 
 using namespace std;
 
+vector<string> split(string str, string delimiter)
+{
+    size_t pos_start = 0, pos_end, delim_len = delimiter.length();
+    string token;
+    vector<string> result;
+
+    while ((pos_end = str.find(delimiter, pos_start)) != string::npos)
+    {
+        token = str.substr(pos_start, pos_end - pos_start);
+        pos_start = pos_end + delim_len;
+        result.push_back(token);
+    }
+
+    result.push_back(str.substr(pos_start));
+    return result;
+}
+
 class Environment
 {
     vector<map<string, string>> stack;
@@ -139,9 +156,9 @@ public:
                 {
                     return handle_if(node, attr);
                 }
-                else if (!strcmp((char *)attr->name, "z-for"))
+                else if (!strcmp((char *)attr->name, "z-loop"))
                 {
-                    return handle_for(node, attr);
+                    return handle_loop(node, attr);
                 }
                 else if (!strcmp((char *)attr->name, "z-num"))
                 {
@@ -172,7 +189,7 @@ public:
         for (xmlAttr *attr = node->properties; attr; attr = attr->next)
         {
             if (!strcmp((char *)attr->name, "z-if") ||
-                !strcmp((char *)attr->name, "z-for") ||
+                !strcmp((char *)attr->name, "z-loop") ||
                 !strcmp((char *)attr->name, "z-num") ||
                 !strcmp((char *)attr->name, "z-var"))
             {
@@ -186,15 +203,40 @@ public:
         return count == 1;
     }
 
+    bool is_truthy(const string &condition)
+    {
+        return condition == "true" || condition == "True" || condition == "TRUE";
+    }
+
     bool handle_if(xmlNode *node, xmlAttr *attr)
     {
-        assert(!"not implemented");
+        string condition = env.get((char *)attr->children->content);
+        if (is_truthy(condition))
+        {
+            show_tag(node);
+            return true;
+        }
         return false;
     }
 
-    bool handle_for(xmlNode *node, xmlAttr *attr)
+    bool handle_loop(xmlNode *node, xmlAttr *attr)
     {
-        assert(!"not implemented");
+        vector<string> loop_variables = split((char *)attr->children->content, ":");
+        string &index_variable = loop_variables[0];
+        string &data_variable = loop_variables[1];
+        vector<string> values = split(env.get(data_variable), ",");
+        show_tag(node);
+        for (const string &value: values)
+        {
+            env.push();
+            env.set(index_variable, value);
+            for (xmlNode *child = node->children; child; child = child->next)
+            {
+                walk(child);
+            }
+            env.pop();
+        }
+        show_tag(node, true);
         return false;
     }
 
@@ -299,6 +341,31 @@ void test_z_var2()
     assert(result == expect);
 }
 
+void test_z_if()
+{
+    string tmpl = "<html><body><p z-if=\"yes\">Should be shown.</p><p z-if=\"no\">Should <em>not</em> be shown.</p></body></html>";
+    Environment env;
+    env.set("yes", "true");
+    env.set("no", "false");
+    Expander exp(tmpl, env);
+    exp.walk();
+    string result = exp.get_result();
+    string expect = "<html><body><p>Should be shown.</p></body></html>";
+    assert(result == expect);
+}
+
+void test_z_loop()
+{
+    string tmpl = "<html><body><ul z-loop=\"item:names\"><li><span z-var=\"item\"/></li></ul></body></html>";
+    Environment env;
+    env.set("names", "Johnson,Vaughan,Jackson");
+    Expander exp(tmpl, env);
+    exp.walk();
+    string result = exp.get_result();
+    string expect = "<html><body><ul><li><span>Johnson</span></li><li><span>Vaughan</span></li><li><span>Jackson</span></li></ul></body></html>";
+    assert(result == expect);
+}
+
 void template_main()
 {
     cout << "Template Expander:" << endl;
@@ -306,5 +373,7 @@ void template_main()
     test_z_num();
     test_z_var();
     test_z_var2();
+    test_z_if();
+    test_z_loop();
     cout << "All tests passed" << endl;
 }
