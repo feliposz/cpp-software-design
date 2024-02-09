@@ -6,6 +6,7 @@ void tests_main();
 void interpreter_main();
 void archiver_main();
 void validator_main();
+void template_main();
 
 int main()
 {
@@ -16,6 +17,7 @@ int main()
     //tests_main();
     //interpreter_main();
     //archiver_main();
-    validator_main();
+    //validator_main();
+    template_main();
     return 0;
 }

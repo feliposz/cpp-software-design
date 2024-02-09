@@ -170,6 +170,7 @@
     <ClCompile Include="ObjectsAndClasses.cpp" />
     <ClCompile Include="ParsingText.cpp" />
     <ClCompile Include="RunningTests.cpp" />
+    <ClCompile Include="TemplateExpander.cpp" />
     <ClCompile Include="_Main.cpp" />
   </ItemGroup>
   <ItemGroup>
