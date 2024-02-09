@@ -9,6 +9,52 @@
 
 using namespace std;
 
+class Environment
+{
+    vector<map<string, string>> stack;
+
+public:
+    Environment()
+    {
+        push();
+    }
+
+    void push()
+    {
+        stack.push_back({});
+    }
+
+    void pop()
+    {
+        stack.pop_back();
+    }
+
+    void set(string identifier, string value)
+    {
+        for (auto s = stack.rbegin(); s != stack.rend(); s++)
+        {
+            if ((*s).count(identifier))
+            {
+                (*s)[identifier] = value;
+                return;
+            }
+        }
+        stack.back()[identifier] = value;
+    };
+
+    string get(string identifier)
+    {
+        for (auto s = stack.rbegin(); s != stack.rend(); s++)
+        {
+            if ((*s).count(identifier))
+            {
+                return (*s)[identifier];
+            }
+        }
+        assert(!"undeclared");
+    }
+};
+
 class BaseVisitor
 {
 public:
@@ -71,8 +117,10 @@ public:
 class Expander : public BaseVisitor
 {
     vector<string> output;
+    Environment &env;
+
 public:
-    Expander(const string &data) : BaseVisitor(data)
+    Expander(const string &data, Environment &env) : BaseVisitor(data), env(env)
     {
     }
 
@@ -82,6 +130,28 @@ public:
         {
             output.push_back((char *)node->content);
             return false;
+        }
+        else if (has_handler(node))
+        {
+            for (xmlAttr *attr = node->properties; attr; attr = attr->next)
+            {
+                if (!strcmp((char *)attr->name, "z-if"))
+                {
+                    return handle_if(node, attr);
+                }
+                else if (!strcmp((char *)attr->name, "z-for"))
+                {
+                    return handle_for(node, attr);
+                }
+                else if (!strcmp((char *)attr->name, "z-num"))
+                {
+                    return handle_num(node, attr);
+                }
+                else if (!strcmp((char *)attr->name, "z-var"))
+                {
+                    return handle_var(node, attr);
+                }
+            }
         }
         else if (node->type == XML_ELEMENT_NODE)
         {
@@ -94,6 +164,52 @@ public:
     void close(xmlNode *node) override
     {
         show_tag(node, true);
+    }
+
+    bool has_handler(xmlNode *node)
+    {
+        int count = 0;
+        for (xmlAttr *attr = node->properties; attr; attr = attr->next)
+        {
+            if (!strcmp((char *)attr->name, "z-if") ||
+                !strcmp((char *)attr->name, "z-for") ||
+                !strcmp((char *)attr->name, "z-num") ||
+                !strcmp((char *)attr->name, "z-var"))
+            {
+                count++;
+            }
+        }
+        if (count > 1)
+        {
+            assert(!"Should be exactly one handler");
+        }
+        return count == 1;
+    }
+
+    bool handle_if(xmlNode *node, xmlAttr *attr)
+    {
+        assert(!"not implemented");
+        return false;
+    }
+
+    bool handle_for(xmlNode *node, xmlAttr *attr)
+    {
+        assert(!"not implemented");
+        return false;
+    }
+
+    bool handle_num(xmlNode *node, xmlAttr *attr)
+    {
+        show_tag(node);
+        output.push_back((char *)attr->children->content);
+        return true;
+    }
+
+    bool handle_var(xmlNode *node, xmlAttr *attr)
+    {
+        show_tag(node);
+        output.push_back(env.get((char *)attr->children->content));
+        return true;
     }
 
     void show_tag(xmlNode *node, bool closing = false)
@@ -140,15 +256,55 @@ public:
 void test_static()
 {
     string tmpl = "<html lang=\"en\"><body><h1 class=\"header\">Static Text</h1><p id=\"par\">test</p></body></html>";
-    Expander e(tmpl);
-    e.walk();
-    string result = e.get_result();
-    assert(tmpl == result);
+    Environment env;
+    Expander exp(tmpl, env);
+    exp.walk();
+    string result = exp.get_result();
+    assert(result == tmpl);
+}
+
+void test_z_num()
+{
+    string tmpl = "<html><body><p><span z-num=\"123\"/></p></body></html>";
+    Environment env;
+    Expander exp(tmpl, env);
+    exp.walk();
+    string result = exp.get_result();
+    string expect = "<html><body><p><span>123</span></p></body></html>";
+    assert(result == expect);
+}
+
+void test_z_var()
+{
+    string tmpl = "<html><body><p><span z-var=\"varName\"/></p></body></html>";
+    Environment env;
+    env.set("varName", "varValue");
+    Expander exp(tmpl, env);
+    exp.walk();
+    string result = exp.get_result();
+    string expect = "<html><body><p><span>varValue</span></p></body></html>";
+    assert(result == expect);
+}
+
+void test_z_var2()
+{
+    string tmpl = "<html><body><p><span z-var=\"firstVar\" /></p><p><span z-var=\"secondVar\" /></p></body></html>";
+    Environment env;
+    env.set("firstVar", "firstValue");
+    env.set("secondVar", "secondValue");
+    Expander exp(tmpl, env);
+    exp.walk();
+    string result = exp.get_result();
+    string expect = "<html><body><p><span>firstValue</span></p><p><span>secondValue</span></p></body></html>";
+    assert(result == expect);
 }
 
 void template_main()
 {
     cout << "Template Expander:" << endl;
     test_static();
+    test_z_num();
+    test_z_var();
+    test_z_var2();
     cout << "All tests passed" << endl;
 }
