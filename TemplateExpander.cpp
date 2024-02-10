@@ -1,3 +1,7 @@
+// Inspired by Chapter 12: A Template Expander
+// From the book: Software Design by Example
+// https://third-bit.com/sdxpy/template
+
 #include "libxml2/libxml/HTMLparser.h"
 
 #include <assert.h>
