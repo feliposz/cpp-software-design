@@ -160,6 +160,10 @@ public:
                 {
                     return handle_loop(node, attr);
                 }
+                else if (!strcmp((char *)attr->name, "z-range"))
+                {
+                    return handle_range(node, attr);
+                }
                 else if (!strcmp((char *)attr->name, "z-num"))
                 {
                     return handle_num(node, attr);
@@ -190,6 +194,7 @@ public:
         {
             if (!strcmp((char *)attr->name, "z-if") ||
                 !strcmp((char *)attr->name, "z-loop") ||
+                !strcmp((char *)attr->name, "z-range") ||
                 !strcmp((char *)attr->name, "z-num") ||
                 !strcmp((char *)attr->name, "z-var"))
             {
@@ -240,6 +245,31 @@ public:
         return false;
     }
 
+    bool handle_range(xmlNode *node, xmlAttr *attr)
+    {
+        vector<string> loop_variables = split((char *)attr->children->content, ":");
+        assert(loop_variables.size() >= 3);
+        string &index_variable = loop_variables[0];
+        int start = stoi(loop_variables[1].c_str());
+        int end = stoi(loop_variables[2].c_str());
+        int step = loop_variables.size() == 3 ? 1 : stoi(loop_variables[3].c_str());
+        assert(step != 0);
+        assert(((step > 0) && (start <= end)) || ((step < 0) && (start >= end)));
+        show_tag(node);
+        for (int index = start; ((step > 0) && (index <= end)) || ((step < 0 && index >= end)); index += step)
+        {
+            env.push();
+            env.set(index_variable, to_string(index));
+            for (xmlNode *child = node->children; child; child = child->next)
+            {
+                walk(child);
+            }
+            env.pop();
+        }
+        show_tag(node, true);
+        return false;
+    }
+
     bool handle_num(xmlNode *node, xmlAttr *attr)
     {
         show_tag(node);
@@ -250,7 +280,8 @@ public:
     bool handle_var(xmlNode *node, xmlAttr *attr)
     {
         show_tag(node);
-        output.push_back(env.get((char *)attr->children->content));
+        string value = env.get((char *)attr->children->content);
+        output.push_back(value);
         return true;
     }
 
@@ -366,6 +397,28 @@ void test_z_loop()
     assert(result == expect);
 }
 
+void test_z_range()
+{
+    string tmpl = "<html><body><ul z-range=\"item:1:5\"><li z-var=\"item\"></li></ul></body></html>";
+    Environment env;
+    Expander exp(tmpl, env);
+    exp.walk();
+    string result = exp.get_result();
+    string expect = "<html><body><ul><li>1</li><li>2</li><li>3</li><li>4</li><li>5</li></ul></body></html>";
+    assert(result == expect);
+}
+
+void test_z_range_reverse()
+{
+    string tmpl = "<html><body><ul z-range=\"item:10:0:-3\"><li z-var=\"item\"></li></ul></body></html>";
+    Environment env;
+    Expander exp(tmpl, env);
+    exp.walk();
+    string result = exp.get_result();
+    string expect = "<html><body><ul><li>10</li><li>7</li><li>4</li><li>1</li></ul></body></html>";
+    assert(result == expect);
+}
+
 void template_main()
 {
     cout << "Template Expander:" << endl;
@@ -375,5 +428,7 @@ void template_main()
     test_z_var2();
     test_z_if();
     test_z_loop();
+    test_z_range();
+    test_z_range_reverse();
     cout << "All tests passed" << endl;
 }
