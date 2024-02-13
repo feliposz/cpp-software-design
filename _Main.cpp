@@ -7,6 +7,7 @@ void interpreter_main();
 void archiver_main();
 void validator_main();
 void template_main();
+void layout_main();
 
 int main()
 {
@@ -18,6 +19,7 @@ int main()
     //interpreter_main();
     //archiver_main();
     //validator_main();
-    template_main();
+    //template_main();
+    layout_main();
     return 0;
 }
