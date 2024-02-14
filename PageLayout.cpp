@@ -24,6 +24,7 @@ public:
     virtual int get_height() = 0;
     virtual void place(int, int) = 0;
     virtual string report() = 0;
+    virtual IRect* wrap() = 0;
 
     void render(vector<string> &screen, char fill = 'a')
     {
@@ -86,6 +87,11 @@ public:
         ss << "[block, " << x0 << ", " << y0 << ", " << (x0 + width) << ", " << (y0 + height) << "]";
         return ss.str();
     }
+
+    IRect* wrap() override
+    {
+        return new Block(width, height);
+    }
 };
 
 class Row : public IRect, public IContainer
@@ -140,6 +146,16 @@ public:
         ss << "]";
         return ss.str();
     }
+
+    IRect* wrap() override
+    {
+        vector<IRect*> wrapped_children;
+        for (auto child : children)
+        {
+            wrapped_children.push_back(child->wrap());
+        }
+        return new Row(wrapped_children);
+    }
 };
 
 class Col : public IRect, public IContainer
@@ -191,6 +207,74 @@ public:
         }
         ss << "]";
         return ss.str();
+    }
+
+    IRect* wrap() override
+    {
+        vector<IRect*> wrapped_children;
+        for (auto child : children)
+        {
+            wrapped_children.push_back(child->wrap());
+        }
+        return new Col(wrapped_children);
+    }
+};
+
+class WrappedRow : public Row
+{
+    int width;
+
+private:
+    void bucket(vector<vector<IRect*>> &result, vector<IRect*> &wrapped_children)
+    {
+        vector<IRect*> current_row;
+        int current_x = 0;
+
+        for (auto child : wrapped_children)
+        {
+            int child_width = child->get_width();
+            if ((current_x + child_width) <= width)
+            {
+                current_row.push_back(child);
+                current_x += child_width;
+            }
+            else
+            {
+                result.push_back(current_row);
+                current_row = { child };
+                current_x = child_width;
+            }
+        }
+        result.push_back(current_row);
+    }
+
+public:
+    WrappedRow(int width, vector<IRect*> children) : Row(children), width(width)
+    {
+        assert(width >= 0);
+    }
+
+    int get_width() override
+    {
+        return width;
+    }
+
+    IRect* wrap() override
+    {
+        vector<IRect*> wrapped_children;
+        for (auto child : children)
+        {
+            wrapped_children.push_back(child->wrap());
+        }
+        vector<vector<IRect*>> rows;
+        bucket(rows, wrapped_children);
+        vector<IRect*> new_rows;
+        for (auto &row : rows)
+        {
+            new_rows.push_back(new Row(row));
+        }
+        IRect *new_col = new Col(new_rows);
+        return new Row({ new_col });
     }
 };
 
@@ -373,6 +457,93 @@ void test_renders_a_grid_of_rows_of_columns()
     delete fixture;
 }
 
+void test_wraps_a_single_unit_block()
+{
+    IRect *fixture = new Block(1, 1);
+    IRect *wrapped = fixture->wrap();
+    wrapped->place(0, 0);
+    string got = wrapped->report();
+    string expect = "[block, 0, 0, 1, 1]";
+    assert(got == expect);
+    delete fixture;
+    delete wrapped;
+}
+
+void test_wraps_a_large_block()
+{
+    IRect *fixture = new Block(3, 4);
+    IRect *wrapped = fixture->wrap();
+    wrapped->place(0, 0);
+    string got = wrapped->report();
+    string expect = "[block, 0, 0, 3, 4]";
+    assert(got == expect);
+    delete fixture;
+    delete wrapped;
+}
+
+void test_wrap_a_row_of_two_blocks_that_fit_on_one_row()
+{
+    IRect *fixture = new WrappedRow(100, { new Block(1, 1), new Block(2, 4) });
+    IRect *wrapped = fixture->wrap();
+    wrapped->place(0, 0);
+    string got = wrapped->report();
+    string expect = "[row, 0, 0, 3, 4, [col, 0, 0, 3, 4, [row, 0, 0, 3, 4, [block, 0, 3, 1, 4], [block, 1, 0, 3, 4]]]]";
+    assert(got == expect);
+    delete fixture;
+    delete wrapped;
+}
+
+void test_wraps_a_column_of_two_blocks()
+{
+    IRect *fixture = new Col({ new Block(1, 1), new Block(2, 4) });
+    IRect *wrapped = fixture->wrap();
+    wrapped->place(0, 0);
+    string got = wrapped->report();
+    string expect = "[col, 0, 0, 2, 5, [block, 0, 0, 1, 1], [block, 0, 1, 2, 5]]";
+    assert(got == expect);
+    delete fixture;
+    delete wrapped;
+}
+
+void test_wraps_a_grid_of_rows_of_columns_that_all_fit_on_their_row()
+{
+    IRect *fixture = new Col({
+        new WrappedRow(100, { new Block(1, 2), new Block(3, 4) }),
+        new WrappedRow(100, { new Block(5, 6), new Col({ new Block(7, 8), new Block(9, 10)}) }),
+                             });
+    IRect *wrapped = fixture->wrap();
+    wrapped->place(0, 0);
+    string got = wrapped->report();
+    string expect = "[col, 0, 0, 14, 22, [row, 0, 0, 4, 4, [col, 0, 0, 4, 4, [row, 0, 0, 4, 4, [block, 0, 2, 1, 4], [block, 1, 0, 4, 4]]]], [row, 0, 4, 14, 22, [col, 0, 4, 14, 22, [row, 0, 4, 14, 22, [block, 0, 16, 5, 22], [col, 5, 4, 14, 22, [block, 5, 4, 12, 12], [block, 5, 12, 14, 22]]]]]]";
+    assert(got == expect);
+    delete fixture;
+    delete wrapped;
+}
+
+void test_wrap_a_row_of_two_blocks_that_do_not_fit_on_one_row()
+{
+    IRect *fixture = new WrappedRow(3, { new Block(2, 1), new Block(2, 1) });
+    IRect *wrapped = fixture->wrap();
+    wrapped->place(0, 0);
+    string got = wrapped->report();
+    string expect = "[row, 0, 0, 2, 2, [col, 0, 0, 2, 2, [row, 0, 0, 2, 1, [block, 0, 0, 2, 1]], [row, 0, 1, 2, 2, [block, 0, 1, 2, 2]]]]";
+    assert(got == expect);
+    delete fixture;
+    delete wrapped;
+}
+
+void test_wrap_multiple_blocks_that_do_not_fit_on_one_row()
+{
+    IRect *fixture = new WrappedRow(3, { new Block(2, 1), new Block(2, 1), new Block(1, 1), new Block(2, 1) });
+    IRect *wrapped = fixture->wrap();
+    wrapped->place(0, 0);
+    string got = wrapped->report();
+    string expect = "[row, 0, 0, 3, 3, [col, 0, 0, 3, 3, [row, 0, 0, 2, 1, [block, 0, 0, 2, 1]], [row, 0, 1, 3, 2, [block, 0, 1, 2, 2], [block, 2, 1, 3, 2]], [row, 0, 2, 2, 3, [block, 0, 2, 2, 3]]]]";
+    assert(got == expect);
+    delete fixture;
+    delete wrapped;
+}
+
 void layout_main()
 {
     cout << "Page Layout:" << endl;
@@ -391,5 +562,12 @@ void layout_main()
     test_renders_a_row_of_two_blocks();
     test_renders_a_column_of_two_blocks();
     test_renders_a_grid_of_rows_of_columns();
+    test_wraps_a_single_unit_block();
+    test_wraps_a_large_block();
+    test_wrap_a_row_of_two_blocks_that_fit_on_one_row();
+    test_wraps_a_column_of_two_blocks();
+    test_wraps_a_grid_of_rows_of_columns_that_all_fit_on_their_row();
+    test_wrap_a_row_of_two_blocks_that_do_not_fit_on_one_row();
+    test_wrap_multiple_blocks_that_do_not_fit_on_one_row();
     cout << "All tests passed!" << endl;
 }
