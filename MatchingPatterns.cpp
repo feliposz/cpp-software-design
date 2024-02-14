@@ -20,10 +20,7 @@ struct Match
         return result == text.length();
     }
 
-    virtual size_t _match(const string &text, size_t start = 0)
-    {
-        throw new exception("not implemented");
-    }
+    virtual size_t _match(const string &text, size_t start = 0) = 0;
 };
 
 struct Null : Match

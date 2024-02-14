@@ -37,6 +37,14 @@ struct Tokenizer
     vector<Token*> tokens;
     string current = "";
 
+    ~Tokenizer()
+    {
+        for (auto t : tokens)
+        {
+            delete t;
+        }
+    }
+
     void add(TokenType type)
     {
         if (current.length() > 0)
@@ -50,7 +58,7 @@ struct Tokenizer
         }
     }
 
-    vector<Token*> *tokenize(string text)
+    void tokenize(string text)
     {
         bool escape_next = false;
         for (const auto ch : text)
@@ -94,11 +102,10 @@ struct Tokenizer
             }
             else
             {
-                throw new exception("invalid character");
+                throw exception("invalid character");
             }
         }
         add(TT_None);
-        return &tokens;
     }
 };
 
@@ -108,8 +115,8 @@ struct Parser
 
     Match *parse(string text)
     {
-        vector<Token*> *tokens = tokenizer.tokenize(text);
-        return _parse(*tokens);
+        tokenizer.tokenize(text);
+        return _parse(tokenizer.tokens);
     }
 
     Match *_parse(vector<Token*> &tokens, int start = 0)
@@ -129,7 +136,7 @@ struct Parser
             Token *end = tokens[start + 3];
             if (tokens.size() - start < 3 || left->type != TT_Literal || right->type != TT_Literal || end->type != TT_EitherEnd)
             {
-                throw new exception("badly-formatted Either");
+                throw exception("badly-formatted Either");
             }
             return new Either(new Lit(left->text), new Lit(right->text), _parse(tokens, start + 4));
         }
@@ -139,7 +146,7 @@ struct Parser
             Token *end = tokens[start + 2];
             if (tokens.size() - start < 2 || chars->type != TT_Literal || end->type != TT_CharsetEnd)
             {
-                throw new exception("badly-formatted Charset");
+                throw exception("badly-formatted Charset");
             }
             return new Charset(chars->text, _parse(tokens, start + 3));
         }
@@ -222,12 +229,15 @@ bool compare_match(Match *a, Match *b)
 
 void test_tok_empty_string()
 {
-    assert((new Tokenizer())->tokenize("")->size() == 0);
+    Tokenizer t;
+    t.tokenize("");
+    assert(t.tokens.size() == 0);
 }
 
 void test_tok_any_either()
 {
-    vector<Token*> *result = (new Tokenizer())->tokenize("*{abc,def}");
+    Tokenizer t;
+    t.tokenize("*{abc,def}");
     vector<Token*> expected = {
         new Token(TT_Any),
         new Token(TT_EitherStart),
@@ -235,12 +245,17 @@ void test_tok_any_either()
         new Token(TT_Literal, "def"),
         new Token(TT_EitherEnd),
     };
-    assert(compare_tokens(*result, expected));
+    assert(compare_tokens(t.tokens, expected));
+    for (auto t : expected)
+    {
+        delete t;
+    }
 }
 
 void test_tok_escape()
 {
-    vector<Token*> *result = (new Tokenizer())->tokenize("\\*{abc,def}\\{xyz\\}");
+    Tokenizer t;
+    t.tokenize("\\*{abc,def}\\{xyz\\}");
     vector<Token*> expected = {
         new Token(TT_Literal, "*"),
         new Token(TT_EitherStart),
@@ -249,21 +264,31 @@ void test_tok_escape()
         new Token(TT_EitherEnd),
         new Token(TT_Literal, "{xyz}"),
     };
-    assert(compare_tokens(*result, expected));
+    assert(compare_tokens(t.tokens, expected));
+    for (auto t : expected)
+    {
+        delete t;
+    }
 }
 
 void test_parse_either_two_lit()
 {
-    Match *result = (new Parser())->parse("{abc,def}");
+    Parser p;
+    Match *result = p.parse("{abc,def}");
     Match *expected = new Either(new Lit("abc"), new Lit("def"));
     assert(compare_match(result, expected));
+    delete expected;
+    delete result;
 }
 
 void test_parse_charset()
 {
-    Match *result = (new Parser())->parse("[abc]");
+    Parser p;
+    Match *result = p.parse("[abc]");
     Match *expected = new Charset("abc");
     assert(compare_match(result, expected));
+    delete result;
+    delete expected;
 }
 
 void parsing_main()
