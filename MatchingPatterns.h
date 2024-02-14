@@ -17,52 +17,50 @@ struct Null : Match
     size_t _match(const string &text, size_t start = 0) override;
 };
 
-extern Match *NULL_MATCH;
-
 struct Lit : Match
 {
     string chars;
-    Lit(string chars, Match *rest = NULL_MATCH);
+    Lit(string chars, Match *rest = new Null());
     size_t _match(const string &text, size_t start = 0) override;
 };
 
 struct Any : Match
 {
-    Any(Match *rest = NULL_MATCH);
+    Any(Match *rest = new Null());
     size_t _match(const string &text, size_t start = 0) override;
 };
 
 struct Either : Match
 {
     Match *left, *right;
-    Either(Match *left, Match *right, Match *rest = NULL_MATCH);
+    Either(Match *left, Match *right, Match *rest = new Null());
     size_t _match(const string &text, size_t start = 0) override;
 };
 
 struct Choice : Match
 {
     vector<Match *> patterns;
-    Choice(vector<Match *> patterns, Match *rest = NULL_MATCH);
+    Choice(vector<Match *> patterns, Match *rest = new Null());
     size_t _match(const string &text, size_t start = 0) override;
 };
 
 struct OnePlus : Match
 {
     char c;
-    OnePlus(char c, Match *rest = NULL_MATCH);
+    OnePlus(char c, Match *rest = new Null());
     size_t _match(const string &text, size_t start = 0) override;
 };
 
 struct Charset : Match
 {
     string charset;
-    Charset(string charset, Match *rest = NULL_MATCH);
+    Charset(string charset, Match *rest = new Null());
     size_t _match(const string &text, size_t start = 0) override;
 };
 
 struct Range : Match
 {
     char left, right;
-    Range(char left, char right, Match *rest = NULL_MATCH);
+    Range(char left, char right, Match *rest = new Null());
     size_t _match(const string &text, size_t start = 0) override;
 };

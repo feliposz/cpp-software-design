@@ -13,13 +13,13 @@ int main()
 {
     //objects_main();
     //duplicate_main();
-    //matching_main();
+    matching_main();
     //parsing_main();
     //tests_main();
     //interpreter_main();
     //archiver_main();
     //validator_main();
     //template_main();
-    layout_main();
+    //layout_main();
     return 0;
 }

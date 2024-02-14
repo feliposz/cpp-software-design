@@ -12,6 +12,8 @@ struct Match
 {
     Match *rest;
 
+    virtual ~Match() = default;
+
     bool match(const string &text)
     {
         size_t result = _match(text, 0);
@@ -31,23 +33,31 @@ struct Null : Match
         this->rest = nullptr;
     }
 
+    ~Null() override
+    {
+    }
+
     size_t _match(const string &text, size_t start = 0) override
     {
         return start;
     }
 };
 
-Match *NULL_MATCH = new Null();
 const size_t NOT_A_MATCH = SIZE_MAX;
 
 struct Lit : Match
 {
     string chars;
 
-    Lit(string chars, Match *rest = NULL_MATCH)
+    Lit(string chars, Match *rest = new Null())
     {
         this->chars = chars;
         this->rest = rest;
+    }
+
+    ~Lit() override
+    {
+        delete rest;
     }
 
     size_t _match(const string &text, size_t start = 0) override
@@ -63,9 +73,14 @@ struct Lit : Match
 
 struct Any : Match
 {
-    Any(Match *rest = NULL_MATCH)
+    Any(Match *rest = new Null())
     {
         this->rest = rest;
+    }
+
+    ~Any() override
+    {
+        delete rest;
     }
 
     size_t _match(const string &text, size_t start = 0) override
@@ -87,16 +102,25 @@ struct Either : Match
 {
     Match *left, *right;
 
-    Either(Match *left, Match *right, Match *rest = NULL_MATCH)
+    Either(Match *left, Match *right, Match *rest = new Null())
     {
         this->left = left;
         this->right = right;
         this->rest = rest;
     }
 
+    ~Either() override
+    {
+        delete left;
+        delete right;
+        delete rest;
+    }
+
     size_t _match(const string &text, size_t start = 0) override
     {
-        vector<Match *> patterns = { this->left, this->right };
+        vector<Match *> patterns;
+        patterns.push_back(this->left);
+        patterns.push_back(this->right);
         for (const auto &pat : patterns)
         {
             size_t end = pat->_match(text, start);
@@ -117,10 +141,19 @@ struct Choice : Match
 {
     vector<Match *> patterns;
 
-    Choice(vector<Match *> patterns, Match *rest = NULL_MATCH)
+    Choice(vector<Match *> patterns, Match *rest = new Null())
     {
         this->patterns = patterns;
         this->rest = rest;
+    }
+
+    ~Choice() override
+    {
+        delete rest;
+        for (auto p : patterns)
+        {
+            delete p;
+        }
     }
 
     size_t _match(const string &text, size_t start = 0) override
@@ -145,10 +178,15 @@ struct OnePlus : Match
 {
     char c;
 
-    OnePlus(char c, Match *rest = NULL_MATCH)
+    OnePlus(char c, Match *rest = new Null())
     {
         this->c = c;
         this->rest = rest;
+    }
+
+    ~OnePlus() override
+    {
+        delete rest;
     }
 
     size_t _match(const string &text, size_t start = 0) override
@@ -176,10 +214,15 @@ struct Charset : Match
 {
     string charset;
 
-    Charset(string charset, Match *rest = NULL_MATCH)
+    Charset(string charset, Match *rest = new Null())
     {
         this->charset = charset;
         this->rest = rest;
+    }
+
+    ~Charset() override
+    {
+        delete rest;
     }
 
     size_t _match(const string &text, size_t start = 0) override
@@ -203,11 +246,16 @@ struct Range : Match
 {
     char left, right;
 
-    Range(char left, char right, Match *rest = NULL_MATCH)
+    Range(char left, char right, Match *rest = new Null())
     {
         this->left = left;
         this->right= right;
         this->rest = rest;
+    }
+
+    ~Range() override
+    {
+        delete rest;
     }
 
     size_t _match(const string &text, size_t start = 0) override
@@ -222,197 +270,275 @@ struct Range : Match
 
 void test_literal_match_entire_string()
 {
-    assert((new Lit("abc"))->match("abc"));
+    Match *m = new Lit("abc");
+    assert(m->match("abc"));
+    delete m;
 }
 
 void test_literal_substring_alone_no_match()
 {
-    assert(!(new Lit("ab"))->match("abc"));
+    Match *m = new Lit("ab");
+    assert(!m->match("abc"));
+    delete m;
 }
 
 void test_literal_superstring_no_match()
 {
-    assert(!(new Lit("abc"))->match("ab"));
+    Match *m = new Lit("abc");
+    assert(!m->match("ab"));
+    delete m;
 }
 
 void test_literal_followed_by_literal_match()
 {
-    assert((new Lit("a", new Lit("b")))->match("ab"));
+    Match *m = new Lit("a", new Lit("b"));
+    assert(m->match("ab"));
+    delete m;
 }
 
 void test_literal_followed_by_literal_no_match()
 {
-    assert(!(new Lit("a", new Lit("b")))->match("ac"));
+    Match *m = new Lit("a", new Lit("b"));
+    assert(!m->match("ac"));
+    delete m;
 }
 
 void test_any_matches_empty()
 {
-    assert((new Any())->match(""));
+    Match *m = new Any();
+    assert(m->match(""));
+    delete m;
 }
 
 void test_any_matches_entire_string()
 {
-    assert((new Any())->match("abc"));
+    Match *m = new Any();
+    assert(m->match("abc"));
+    delete m;
 }
 
 void test_any_matches_as_prefix()
 {
-    assert((new Any(new Lit("def")))->match("abcdef"));
+    Match *m = new Any(new Lit("def"));
+    assert(m->match("abcdef"));
+    delete m;
 }
 
 void test_any_matches_as_suffix()
 {
-    assert((new Lit("abc", new Any()))->match("abcdef"));
+    Match *m = new Lit("abc", new Any());
+    assert(m->match("abcdef"));
+    delete m;
 }
 
 void test_any_matches_interior()
 {
-    assert((new Lit("a", new Any(new Lit("c"))))->match("abc"));
+    Match *m = new Lit("a", new Any(new Lit("c")));
+    assert(m->match("abc"));
+    delete m;
 }
 
 void test_either_two_literals_first()
 {
-    assert((new Either(new Lit("a"), new Lit("b")))->match("a"));
+    Match *m = new Either(new Lit("a"), new Lit("b"));
+    assert(m->match("a"));
+    delete m;
 }
 
 void test_either_two_literals_not_both()
 {
-    assert(!(new Either(new Lit("a"), new Lit("b")))->match("ab"));
+    Match *m = new Either(new Lit("a"), new Lit("b"));
+    assert(!m->match("ab"));
+    delete m;
 }
 
 void test_either_followed_by_literal_match()
 {
-    assert((new Either(new Lit("a"), new Lit("b"), new Lit("c")))->match("ac"));
+    Match *m = new Either(new Lit("a"), new Lit("b"), new Lit("c"));
+    assert(m->match("ac"));
+    delete m;
 }
 
 void test_either_followed_by_literal_no_match()
 {
-    assert(!(new Either(new Lit("a"), new Lit("b"), new Lit("c")))->match("ax"));
+    Match *m = new Either(new Lit("a"), new Lit("b"), new Lit("c"));
+    assert(!m->match("ax"));
+    delete m;
 }
 
 void test_oneplus_empty_no_match()
 {
-    assert(!(new OnePlus('a'))->match(""));
+    Match *m = new OnePlus('a');
+    assert(!m->match(""));
+    delete m;
 }
 
 void test_oneplus_matches_one()
 {
-    assert((new OnePlus('a'))->match("a"));
+    Match *m = new OnePlus('a');
+    assert(m->match("a"));
+    delete m;
 }
 
 void test_oneplus_matches_multiple()
 {
-    assert((new OnePlus('a'))->match("aaa"));
+    Match *m = new OnePlus('a');
+    assert(m->match("aaa"));
+    delete m;
 }
 
 void test_oneplus_one_no_match()
 {
-    assert(!(new OnePlus('a'))->match("x"));
+    Match *m = new OnePlus('a');
+    assert(!m->match("x"));
+    delete m;
 }
 
 void test_oneplus_multiple_no_match()
 {
-    assert(!(new OnePlus('a'))->match("xax"));
+    Match *m = new OnePlus('a');
+    assert(!m->match("xax"));
+    delete m;
 }
 
 void test_oneplus_matches_as_prefix()
 {
-    assert((new OnePlus('x', new Lit("abc")))->match("xxabc"));
+    Match *m = new OnePlus('x', new Lit("abc"));
+    assert(m->match("xxabc"));
+    delete m;
 }
 
 void test_oneplus_matches_as_suffix()
 {
-    assert((new Lit("abc", new OnePlus('x')))->match("abcxx"));
+    Match *m = new Lit("abc", new OnePlus('x'));
+    assert(m->match("abcxx"));
+    delete m;
 }
 
 void test_oneplus_matches_as_infix()
 {
-    assert((new Lit("abc", new OnePlus('x', new Lit("def"))))->match("abcxxdef"));
+    Match *m = new Lit("abc", new OnePlus('x', new Lit("def")));
+    assert(m->match("abcxxdef"));
+    delete m;
 }
 
 void test_charset_matches()
 {
-    assert((new Charset("aeiou"))->match("i"));
+    Match *m = new Charset("aeiou");
+    assert(m->match("i"));
+    delete m;
 }
 
 void test_charset_no_match()
 {
-    assert(!(new Charset("aeiou"))->match("x"));
+    Match *m = new Charset("aeiou");
+    assert(!m->match("x"));
+    delete m;
 }
 
 void test_charset_empty_no_match()
 {
-    assert(!(new Charset("aeiou"))->match(""));
+    Match *m = new Charset("aeiou");
+    assert(!m->match(""));
+    delete m;
 }
 
 void test_range_start_matches()
 {
-    assert((new Range('a', 'f'))->match("a"));
+    Match *m = new Range('a', 'f');
+    assert(m->match("a"));
+    delete m;
 }
 
 void test_range_mid_matches()
 {
-    assert((new Range('a', 'f'))->match("c"));
+    Match *m = new Range('a', 'f');
+    assert(m->match("c"));
+    delete m;
 }
 
 void test_range_end_matches()
 {
-    assert((new Range('a', 'f'))->match("f"));
+    Match *m = new Range('a', 'f');
+    assert(m->match("f"));
+    delete m;
 }
 
 void test_range_no_match()
 {
-    assert(!(new Range('a', 'f'))->match("z"));
+    Match *m = new Range('a', 'f');
+    assert(!m->match("z"));
+    delete m;
 }
 
 void test_choice_one_literal_matches()
 {
-    assert((new Choice({ new Lit("a") }))->match("a"));
+    Match *m = new Choice({ new Lit("a") });
+    assert(m->match("a"));
+    delete m;
 }
 
 void test_choice_one_literal_no_match()
 {
-    assert(!(new Choice({ new Lit("a") }))->match("b"));
+    Match *m = new Choice({ new Lit("a") });
+    assert(!m->match("b"));
+    delete m;
 }
 
 void test_choice_two_literals_first()
 {
-    assert((new Choice({ new Lit("a"), new Lit("b") }))->match("a"));
+    Match *m = new Choice({ new Lit("a"), new Lit("b") });
+    assert(m->match("a"));
+    delete m;
 }
 
 void test_choice_three_literals_second()
 {
-    assert((new Choice({ new Lit("a"), new Lit("b"), new Lit("c") }))->match("b"));
+    Match *m = new Choice({ new Lit("a"), new Lit("b"), new Lit("c") });
+    assert(m->match("b"));
+    delete m;
 }
 
 void test_choice_four_literals_last()
 {
-    assert((new Choice({ new Lit("a"), new Lit("b"), new Lit("c"), new Lit("d") }))->match("d"));
+    Match *m = new Choice({ new Lit("a"), new Lit("b"), new Lit("c"), new Lit("d") });
+    assert(m->match("d"));
+    delete m;
 }
 
 void test_choice_two_literals_not_both()
 {
-    assert(!(new Choice({ new Lit("a"), new Lit("b") }))->match("ab"));
+    Match *m = new Choice({ new Lit("a"), new Lit("b") });
+    assert(!m->match("ab"));
+    delete m;
 }
 
 void test_choice_three_literals_not_both()
 {
-    assert(!(new Choice({ new Lit("a"), new Lit("b"), new Lit("c") }))->match("x"));
+    Match *m = new Choice({ new Lit("a"), new Lit("b"), new Lit("c") });
+    assert(!m->match("x"));
+    delete m;
 }
 
 void test_choice_followed_by_literal_match()
 {
-    assert((new Choice({ new Lit("a"), new Lit("b") }, new Lit("c")))->match("ac"));
+    Match *m = new Choice({ new Lit("a"), new Lit("b") }, new Lit("c"));
+    assert(m->match("ac"));
+    delete m;
 }
 
 void test_choice_followed_by_literal_no_match()
 {
-    assert(!(new Choice({ new Lit("a"), new Lit("b") }, new Lit("c")))->match("ax"));
+    Match *m = new Choice({ new Lit("a"), new Lit("b") }, new Lit("c"));
+    assert(!m->match("ax"));
+    delete m;
 }
 
 void test_choice_empty_no_match()
 {
-    assert(!(new Choice({ }))->match("x"));
+    Match *m = new Choice({ });
+    assert(!m->match("x"));
+    delete m;
 }
 
 void matching_main()

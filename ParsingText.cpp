@@ -116,7 +116,7 @@ struct Parser
     {
         if (start >= tokens.size())
         {
-            return NULL_MATCH;
+            return new Null();
         }
         else if (tokens[start]->type == TT_Any)
         {
@@ -147,6 +147,7 @@ struct Parser
         {
             return new Lit(tokens[start]->text, _parse(tokens, start + 1));
         }
+        throw exception("invalid code path");
     }
 };
 
