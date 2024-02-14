@@ -16,20 +16,32 @@ inline int max(int a, int b)
 
 class IRect
 {
+protected:
+    int x0, y0;
 public:
     virtual ~IRect() = default;
     virtual int get_width() = 0;
     virtual int get_height() = 0;
     virtual void place(int, int) = 0;
     virtual string report() = 0;
+
+    void render(vector<string> &screen, char fill = 'a')
+    {
+        for (int y = 0; y < get_height(); y++)
+        {
+            for (int x = 0; x < get_width(); x++)
+            {
+                screen[y0 + y][x0 + x] = fill;
+            }
+        }
+    }
 };
 
 class IContainer
 {
-protected:
+public:
     vector<IRect*> children;
 
-public:
     IContainer(vector<IRect*> children) : children(children)
     {
     }
@@ -45,7 +57,7 @@ public:
 
 class Block : public IRect
 {
-    int width, height, x0, y0;
+    int width, height;
 
 public:
     Block(int w, int h) : width(w), height(h)
@@ -76,10 +88,8 @@ public:
     }
 };
 
-class Row : public IRect, IContainer
+class Row : public IRect, public IContainer
 {
-    int x0, y0;
-
 public:
     Row(vector<IRect*> children) : IContainer(children)
     {
@@ -132,10 +142,8 @@ public:
     }
 };
 
-class Col : public IRect, IContainer
+class Col : public IRect, public IContainer
 {
-    int x0, y0;
-
 public:
     Col(vector<IRect*> children) : IContainer(children)
     {
@@ -186,36 +194,69 @@ public:
     }
 };
 
+void make_screen(vector<string> &screen, int width, int height)
+{
+    for (int y = 0; y < height; y++)
+    {
+        string row(width, ' ');
+        screen.push_back(row);
+    }
+}
+
+char draw(vector<string> &screen, IRect *root, char fill = 0)
+{
+    fill = fill == 0 ? 'a' : fill + 1;
+    root->render(screen, fill);
+    if (IContainer *c = dynamic_cast<IContainer *>(root))
+    {
+        for (auto child : c->children)
+        {
+            fill = draw(screen, child, fill);
+        }
+    }
+    return fill;
+}
+
+void render(vector<string> &screen, IRect *root)
+{
+    root->place(0, 0);
+    make_screen(screen, root->get_width(), root->get_height());
+    draw(screen, root);
+    for (const string &line : screen)
+    {
+        //cout << line << endl;
+    }
+}
+
 void test_lays_out_a_single_unit_block()
 {
     IRect *fixture = new Block(1, 1);
     assert(fixture->get_width() == 1);
     assert(fixture->get_height() == 1);
-
     delete fixture;
 }
+
 void test_lays_out_a_large_block()
 {
     IRect *fixture = new Block(3, 4);
     assert(fixture->get_width() == 3);
     assert(fixture->get_height() == 4);
-
     delete fixture;
 }
+
 void test_lays_out_a_row_of_two_blocks()
 {
     IRect *fixture = new Row({ new Block(1, 1), new Block(2, 4) });
     assert(fixture->get_width() == 3);
     assert(fixture->get_height() == 4);
-
     delete fixture;
 }
+
 void test_lays_out_a_column_of_two_blocks()
 {
     IRect *fixture = new Col({ new Block(1, 1), new Block(2, 4) });
     assert(fixture->get_width() == 2);
     assert(fixture->get_height() == 5);
-
     delete fixture;
 }
 
@@ -225,10 +266,8 @@ void test_lays_out_a_grid_of_rows_of_columns()
         new Row({ new Block(1, 2), new Block(3, 4) }),
         new Row({ new Block(5, 6), new Col({new Block(7, 8), new Block(9, 10)}) })
     });
-
     assert(fixture->get_width() == 14);
     assert(fixture->get_height() == 22);
-
     delete fixture;
 }
 
@@ -272,6 +311,68 @@ void test_places_a_grid_of_rows_of_columns()
     delete fixture;
 }
 
+void test_renders_a_single_unit_block()
+{
+    IRect *fixture = new Block(1, 1);
+    vector<string> screen;
+    render(screen, fixture);
+    vector<string> expect = { "a" };
+    assert(screen == expect);
+    delete fixture;
+}
+
+void test_renders_a_large_block()
+{
+    IRect *fixture = new Block(3, 4);
+    vector<string> screen;
+    render(screen, fixture);
+    vector<string> expect = { "aaa", "aaa", "aaa", "aaa" };
+    assert(screen == expect);
+    delete fixture;
+}
+
+void test_renders_a_row_of_two_blocks()
+{
+    IRect *fixture = new Row({ new Block(1, 1), new Block(2, 4) });
+    vector<string> screen;
+    render(screen, fixture);
+    vector<string> expect = { "acc", "acc", "acc", "bcc" };
+    assert(screen == expect);
+    delete fixture;
+}
+
+void test_renders_a_column_of_two_blocks()
+{
+    IRect *fixture = new Col({ new Block(1, 1), new Block(2, 4) });
+    vector<string> screen;
+    render(screen, fixture);
+    vector<string> expect = { "ba", "cc", "cc", "cc", "cc" };
+    assert(screen == expect);
+    delete fixture;
+}
+
+void test_renders_a_grid_of_rows_of_columns()
+{
+    IRect *fixture = new Col({ new Row({new Block(1, 2), new Block(3, 4)}), new Row({new Block(1, 2), new Col({new Block(3, 4), new Block(2, 3)})}) });
+    vector<string> screen;
+    render(screen, fixture);
+    vector<string> expect = {
+            "bddd",
+            "bddd",
+            "cddd",
+            "cddd",
+            "ehhh",
+            "ehhh",
+            "ehhh",
+            "ehhh",
+            "eiig",
+            "fiig",
+            "fiig",
+    };
+    assert(screen == expect);
+    delete fixture;
+}
+
 void layout_main()
 {
     cout << "Page Layout:" << endl;
@@ -285,5 +386,10 @@ void layout_main()
     test_places_a_row_of_two_blocks();
     test_places_a_column_of_two_blocks();
     test_places_a_grid_of_rows_of_columns();
+    test_renders_a_single_unit_block();
+    test_renders_a_large_block();
+    test_renders_a_row_of_two_blocks();
+    test_renders_a_column_of_two_blocks();
+    test_renders_a_grid_of_rows_of_columns();
     cout << "All tests passed!" << endl;
 }
