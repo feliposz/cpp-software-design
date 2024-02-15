@@ -8,18 +8,20 @@ void archiver_main();
 void validator_main();
 void template_main();
 void layout_main();
+void profiling_main();
 
 int main()
 {
     //objects_main();
     //duplicate_main();
     //matching_main();
-    parsing_main();
+    //parsing_main();
     //tests_main();
     //interpreter_main();
     //archiver_main();
     //validator_main();
     //template_main();
     //layout_main();
+    profiling_main();
     return 0;
 }
