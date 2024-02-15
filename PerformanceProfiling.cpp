@@ -8,6 +8,7 @@
 #include <string>
 #include <map>
 #include <set>
+#include <chrono>
 
 using namespace std;
 
@@ -32,7 +33,7 @@ struct DataFrame
     virtual DataFrame* select(const set<string> &names) = 0;
 
     //Select a subset of rows by testing values.
-    virtual DataFrame* filter(bool(*func)(map<string, int> &row)) = 0;
+    virtual DataFrame* filter(bool(*func)(DataFrame *df, size_t row)) = 0;
 };
 
 struct DfRow : DataFrame
@@ -114,28 +115,23 @@ struct DfRow : DataFrame
 
     virtual DataFrame* select(const set<string>& name_set) override
     {
-        vector<map<string, int>> result;
+        vector<map<string, int>> result(data.size());
         for (size_t i = 0; i < data.size(); i++)
         {
-            map<string, int> selected_row;
-            for (const auto &kv : data[i])
+            for (const auto &name : name_set)
             {
-                if (name_set.count(kv.first))
-                {
-                    selected_row[kv.first] = kv.second;
-                }
+                result[i][name] = data[i][name];
             }
-            result.push_back(selected_row);
         }
         return new DfRow(result);
     }
 
-    virtual DataFrame* filter(bool(*func)(map<string, int> &row)) override
+    virtual DataFrame* filter(bool(*func)(DataFrame *df, size_t row)) override
     {
         vector<map<string, int>> result;
         for (size_t i = 0; i < data.size(); i++)
         {
-            if (func(data[i]))
+            if (func(this, i))
             {
                 result.push_back(data[i]);
             }
@@ -146,9 +142,9 @@ struct DfRow : DataFrame
 
 struct DfCol : DataFrame
 {
-    map<string,vector<int>> data;
+    map<string, vector<int>> data;
 
-    DfCol(const map<string,vector<int>> &data) : data(data)
+    DfCol(const map<string, vector<int>> &data) : data(data)
     {
         size_t first_size;
         for (const auto &kv : data)
@@ -228,29 +224,21 @@ struct DfCol : DataFrame
 
     virtual DataFrame* select(const set<string>& name_set) override
     {
-        map<string,vector<int>> result;
-        for (const auto &kv : data)
+        map<string, vector<int>> result;
+        for (const auto &name : name_set)
         {
-            if (name_set.count(kv.first))
-            {
-                result[kv.first] = kv.second;
-            }
+            result[name] = data[name];
         }
         return new DfCol(result);
     }
 
-    virtual DataFrame* filter(bool(*func)(map<string, int> &row)) override
+    virtual DataFrame* filter(bool(*func)(DataFrame *df, size_t row)) override
     {
-        map<string,vector<int>> result;
+        map<string, vector<int>> result;
         size_t nrow = this->nrow();
         for (size_t i = 0; i < nrow; i++)
         {
-            map<string, int> row;
-            for (const auto &kv : data)
-            {
-                row[kv.first] = kv.second[i];
-            }
-            if (func(row))
+            if (func(this, i))
             {
                 for (const auto &kv : data)
                 {
@@ -337,9 +325,9 @@ void test_dfrow_select()
 
 void test_dfrow_filter()
 {
-    auto is_odd = [](map<string, int> &row)
+    auto is_odd = [](DataFrame *df, size_t row)
     {
-        return (row["a"] % 2) == 1;
+        return (df->get("a", row) % 2) == 1;
     };
 
     DataFrame *df = odd_even();
@@ -414,9 +402,9 @@ void test_dfcol_select()
 
 void test_dfcol_filter()
 {
-    auto is_odd = [](map<string, int> &row)
+    auto is_odd = [](DataFrame *df, size_t row)
     {
-        return (row["a"] % 2) == 1;
+        return (df->get("a", row) % 2) == 1;
     };
 
     DataFrame *df = new DfCol({ { "a", {1, 2} }, {"b", {3, 4} } });
@@ -426,6 +414,104 @@ void test_dfcol_filter()
     delete df;
     delete filtered;
     delete expected;
+}
+
+const size_t RANGE = 10;
+
+DataFrame *make_col(size_t nrow, size_t ncol)
+{
+    map<string, vector<int>> data;
+    vector<string> col_names;
+    for (size_t c = 0; c < ncol; c++)
+    {
+        col_names.push_back("label_" + to_string(c));
+    }
+    for (size_t c = 0; c < ncol; c++)
+    {
+        for (size_t r = 0; r < nrow; r++)
+        {
+            data[col_names[c]].push_back((c + r) % RANGE);
+        }
+    }
+    return new DfCol(data);
+}
+
+DataFrame *make_row(size_t nrow, size_t ncol)
+{
+    vector<map<string, int>> data;
+    vector<string> col_names;
+    for (size_t c = 0; c < ncol; c++)
+    {
+        col_names.push_back("label_" + to_string(c));
+    }
+    for (size_t r = 0; r < nrow; r++)
+    {
+        data.push_back({});
+        for (size_t c = 0; c < ncol; c++)
+        {
+            data[r][col_names[c]] = (c + r) % RANGE;
+        }
+    }
+    return new DfRow(data);
+}
+
+auto time_filter(DataFrame *df)
+{
+    auto first_is_odd = [](DataFrame *df, size_t row)
+    {
+        return (df->get("label_0", row) % 2) == 1;
+    };
+    auto start = chrono::steady_clock::now();
+    DataFrame *filtered = df->filter(first_is_odd);
+    auto end = chrono::steady_clock::now();
+    auto time = end - start;
+    delete filtered;
+    return time;
+}
+
+auto time_select(DataFrame *df)
+{
+    set<string> selected_cols;
+    int i = 0;
+    for (auto col : df->cols())
+    {
+        if ((i % 3) == 0)
+        {
+            selected_cols.emplace(col);
+        }
+    }
+    auto start = chrono::steady_clock::now();
+    DataFrame *selected = df->select(selected_cols);
+    auto end = chrono::steady_clock::now();
+    auto time = end - start;
+    delete selected;
+    return time;
+}
+
+void sweep()
+{
+    const double NANO_TO_MS = 1.0 / 1000000.0;
+#if 1
+    vector<size_t> sizes = { 5, 10, 50, 100, 250, 500 };
+#else
+    vector<size_t> sizes = { 10, 100, 1000, 2500 };
+#endif
+    cout << "Profiling... (times are in ms)" << endl;
+    cout << "nrow\tncol\tflt_col\tsel_col\tflt_row\tsel_row" << endl;
+    for (auto size : sizes)
+    {
+        DataFrame *df_col = make_col(size, size);
+        DataFrame *df_row = make_row(size, size);
+        vector<double> times = {
+            time_filter(df_col).count() * NANO_TO_MS,
+            time_select(df_col).count() * NANO_TO_MS,
+            time_filter(df_row).count() * NANO_TO_MS,
+            time_select(df_row).count() * NANO_TO_MS,
+        };
+        cout << size << "\t" << size << "\t" << times[0] << "\t" << times[1] << "\t" << times[2] << "\t" << times[3] << endl;
+        delete df_col;
+        delete df_row;
+    }
 }
 
 void profiling_main()
@@ -448,4 +534,5 @@ void profiling_main()
     test_dfcol_select();
     test_dfcol_filter();
     cout << "All tests passed!" << endl;
+    sweep();
 }
