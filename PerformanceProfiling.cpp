@@ -21,7 +21,7 @@ struct DataFrame
     virtual size_t nrow() = 0;
 
     // Return the set of column names.
-    virtual vector<string> cols() = 0;
+    virtual set<string> cols() = 0;
 
     // Check equality with another dataframe.
     virtual bool eq(DataFrame *other) = 0;
@@ -71,12 +71,12 @@ struct DfRow : DataFrame
         return data.size();
     }
 
-    virtual vector<string> cols() override
+    virtual set<string> cols() override
     {
-        vector<string> result;
+        set<string> result;
         for (const auto &[key, value] : data[0])
         {
-            result.push_back(key);
+            result.emplace(key);
         }
         return result;
     }
@@ -180,12 +180,12 @@ struct DfCol : DataFrame
         throw exception("unreachable");
     }
 
-    virtual vector<string> cols() override
+    virtual set<string> cols() override
     {
-        vector<string> result;
+        set<string> result;
         for (const auto &[key, value] : data)
         {
-            result.push_back(key);
+            result.emplace(key);
         }
         return result;
     }
@@ -514,6 +514,52 @@ void sweep()
     }
 }
 
+DfRow *convert_col_to_row(DfCol *df)
+{
+    vector<unordered_map<string, int>> data(df->nrow());
+    for (const auto &[key, value] : df->data)
+    {
+        for (size_t i = 0; i < df->nrow(); i++)
+        {
+            data[i][key] = value[i];
+        }
+    }
+    return new DfRow(data);
+}
+
+DfCol *convert_row_to_col(DfRow *df)
+{
+    unordered_map<string, vector<int>> data;
+    size_t nrow = df->nrow();
+    for (const auto &col : df->cols())
+    {
+        data[col].resize(nrow);
+        for (size_t i = 0; i < nrow; i++)
+        {
+            data[col][i] = df->data[i][col];
+        }
+    }
+    return new DfCol(data);
+}
+
+void test_convert_col_to_row()
+{
+    DfCol *df_col = new DfCol({ { "a", {1, 2} }, {"b", {3, 4} } });
+    DfRow *df_row = convert_col_to_row(df_col);
+    assert(df_col->eq(df_row));
+    delete df_col;
+    delete df_row;
+}
+
+void test_convert_row_to_col()
+{
+    DfRow *df_row = new DfRow({ { { "a", 1 }, { "b" , 3 } }, { {"a", 2}, {"b", 4} } });
+    DfCol *df_col = convert_row_to_col(df_row);
+    assert(df_row->eq(df_col));
+    delete df_col;
+    delete df_row;
+}
+
 void profiling_main()
 {
     cout << "Performance Profiling:" << endl;
@@ -533,6 +579,8 @@ void profiling_main()
     test_dfcol_inequality();
     test_dfcol_select();
     test_dfcol_filter();
+    test_convert_col_to_row();
+    test_convert_row_to_col();
     cout << "All tests passed!" << endl;
-    sweep();
+    //sweep();
 }
