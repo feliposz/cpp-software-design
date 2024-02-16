@@ -416,9 +416,7 @@ void test_dfcol_filter()
     delete expected;
 }
 
-const size_t RANGE = 10;
-
-DataFrame *make_col(size_t nrow, size_t ncol)
+DataFrame *make_col(size_t nrow, size_t ncol, size_t range = 10)
 {
     unordered_map<string, vector<int>> data;
     vector<string> col_names;
@@ -430,13 +428,13 @@ DataFrame *make_col(size_t nrow, size_t ncol)
     {
         for (size_t r = 0; r < nrow; r++)
         {
-            data[col_names[c]].push_back((c + r) % RANGE);
+            data[col_names[c]].push_back((c + r) % range);
         }
     }
     return new DfCol(data);
 }
 
-DataFrame *make_row(size_t nrow, size_t ncol)
+DataFrame *make_row(size_t nrow, size_t ncol, size_t range = 10)
 {
     vector<unordered_map<string, int>> data(nrow);
     vector<string> col_names(ncol);
@@ -448,7 +446,7 @@ DataFrame *make_row(size_t nrow, size_t ncol)
     {
         for (size_t c = 0; c < ncol; c++)
         {
-            data[r][col_names[c]] = (c + r) % RANGE;
+            data[r][col_names[c]] = (c + r) % range;
         }
     }
     return new DfRow(data);
@@ -560,7 +558,7 @@ void test_convert_row_to_col()
     delete df_row;
 }
 
-DfCol *join_col(DataFrame *left, string left_key, DataFrame *right, string right_key)
+DataFrame *join_col(DataFrame *left, const string &left_key, DataFrame *right, const string &right_key)
 {
     size_t nrow_left = left->nrow();
     size_t nrow_right = right->nrow();
@@ -589,7 +587,7 @@ DfCol *join_col(DataFrame *left, string left_key, DataFrame *right, string right
     return new DfCol(data);
 }
 
-DfRow *join_row(DataFrame *left, string left_key, DataFrame *right, string right_key)
+DataFrame *join_row(DataFrame *left, const string &left_key, DataFrame *right, const string &right_key)
 {
     size_t nrow_left = left->nrow();
     size_t nrow_right = right->nrow();
@@ -617,30 +615,140 @@ DfRow *join_row(DataFrame *left, string left_key, DataFrame *right, string right
     return new DfRow(data);
 }
 
-void test_join_col()
+DataFrame *join_col_fast(DataFrame *left, const string &left_key, DataFrame *right, const string &right_key)
 {
-    DataFrame *left = new DfCol({ {"key", {1, 2, 3}}, {"left", {11, 21, 31}} });
-    DataFrame *right = new DfCol({ {"key", {1, 1, 2}}, {"right", {12, 13, 22}} });
-    DataFrame *expect = new DfCol({ {"key", {1, 1, 2}}, {"left", {11, 11, 21}}, {"right", {12, 13, 22}} });
-    DataFrame *joined = join_col(left, "key", right, "key");
-    assert(joined->eq(expect));
-    delete left;
-    delete right;
-    delete expect;
-    delete joined;
+    size_t nrow_left = left->nrow();
+    size_t nrow_right = right->nrow();
+    unordered_map<string, vector<int>> data;
+    size_t out_index = 0;
+    unordered_map<int, vector<int>> left_index, right_index;
+    
+    for (int left_i = 0; left_i < nrow_left; left_i++)
+    {
+        left_index[left->get(left_key, left_i)].push_back(left_i);
+    }
+    for (int right_i = 0; right_i < nrow_left; right_i++)
+    {
+        right_index[right->get(right_key, right_i)].push_back(right_i);
+    }
+
+    for (const auto &[left_value, left_indices] : left_index)
+    {
+        for (const auto &right_i : right_index[left_value])
+        {
+            for (const auto &left_i : left_indices)
+            {
+                for (const auto &col : left->cols())
+                {
+                    data[col].resize(out_index + 1);
+                    data[col][out_index] = left->get(col, left_i);
+                }
+                for (const auto &col : right->cols())
+                {
+                    data[col].resize(out_index + 1);
+                    data[col][out_index] = right->get(col, right_i);
+                }
+                out_index++;
+            }
+        }
+    }
+    return new DfCol(data);
 }
 
-void test_join_row()
+DataFrame *join_row_fast(DataFrame *left, const string &left_key, DataFrame *right, const string &right_key)
+{
+    size_t nrow_left = left->nrow();
+    size_t nrow_right = right->nrow();
+    vector<unordered_map<string, int>> data;
+    size_t out_index = 0;
+    unordered_map<int, vector<int>> left_index, right_index;
+
+    for (int left_i = 0; left_i < nrow_left; left_i++)
+    {
+        left_index[left->get(left_key, left_i)].push_back(left_i);
+    }
+    for (int right_i = 0; right_i < nrow_left; right_i++)
+    {
+        right_index[right->get(right_key, right_i)].push_back(right_i);
+    }
+
+    for (const auto &[left_value, left_indices] : left_index)
+    {
+        for (const auto &right_i : right_index[left_value])
+        {
+            for (const auto &left_i : left_indices)
+            {
+                data.push_back({});
+                for (const auto &col : left->cols())
+                {
+                    data[out_index][col] = left->get(col, left_i);
+                }
+                for (const auto &col : right->cols())
+                {
+                    data[out_index][col] = right->get(col, right_i);
+                }
+                out_index++;
+            }
+        }
+    }
+    return new DfRow(data);
+}
+
+void test_joins()
 {
     DataFrame *left = new DfCol({ {"key", {1, 2, 3}}, {"left", {11, 21, 31}} });
     DataFrame *right = new DfCol({ {"key", {1, 1, 2}}, {"right", {12, 13, 22}} });
     DataFrame *expect = new DfCol({ {"key", {1, 1, 2}}, {"left", {11, 11, 21}}, {"right", {12, 13, 22}} });
-    DataFrame *joined = join_row(left, "key", right, "key");
-    assert(joined->eq(expect));
+    for (auto join_func : { join_row, join_col, join_row_fast, join_col_fast })
+    {
+        DataFrame *joined = join_func(left, "key", right, "key");
+        assert(joined->eq(expect));
+        delete joined;
+    }
     delete left;
     delete right;
     delete expect;
+}
+
+chrono::nanoseconds
+time_join(DataFrame *left, const string &left_key, DataFrame *right, const string &right_key,
+          DataFrame *(*join_func)(DataFrame *left, const string &left_key, DataFrame *right, const string &right_key))
+{
+    auto start = chrono::steady_clock::now();
+    DataFrame *joined = join_func(left, left_key, right, right_key);
+    auto end = chrono::steady_clock::now();
+    auto time = end - start;
     delete joined;
+    return time;
+}
+
+void sweep_join()
+{
+    const double NANO_TO_MS = 1.0 / 1000000.0;
+
+#if 0
+    vector<size_t> sizes = { 10, 50, 100, 500, 1000 };
+#else
+    vector<size_t> sizes = { 5, 10, 25, 50 };
+#endif
+
+    cout << "Profiling joins... (times are in ms)" << endl;
+    cout << "nrow\tncol\tslo_col\tslo_row\tfst_col\tfst_row" << endl;
+    for (auto size : sizes)
+    {
+        DataFrame *left = make_col(size, size, size / 2);
+        DataFrame *right = make_col(size, size, size / 2);
+        assert(left->eq(right) && right->eq(left));
+        vector<double> times = {
+            time_join(left, "label_0", right, "label_4", join_col).count() * NANO_TO_MS,
+            time_join(left, "label_0", right, "label_4", join_row).count() * NANO_TO_MS,
+            time_join(left, "label_0", right, "label_4", join_col_fast).count() * NANO_TO_MS,
+            time_join(left, "label_0", right, "label_4", join_row_fast).count() * NANO_TO_MS,
+        };
+        cout << size << "\t" << size << "\t" << times[0] << "\t" << times[1] << "\t" << times[2] << "\t" << times[3] << endl;
+        delete left;
+        delete right;
+    }
 }
 
 void profiling_main()
@@ -664,8 +772,8 @@ void profiling_main()
     test_dfcol_filter();
     test_convert_col_to_row();
     test_convert_row_to_col();
-    test_join_col();
-    test_join_row();
+    test_joins();
     cout << "All tests passed!" << endl;
     //sweep();
+    sweep_join();
 }
