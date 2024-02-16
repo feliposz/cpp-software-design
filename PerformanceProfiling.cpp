@@ -6,7 +6,7 @@
 #include <iostream>
 #include <vector>
 #include <string>
-#include <map>
+#include <unordered_map>
 #include <set>
 #include <chrono>
 
@@ -38,21 +38,21 @@ struct DataFrame
 
 struct DfRow : DataFrame
 {
-    vector<map<string, int>> data;
+    vector<unordered_map<string, int>> data;
 
-    DfRow(const vector<map<string, int>> &data) : data(data)
+    DfRow(const vector<unordered_map<string, int>> &data) : data(data)
     {
         set<string> prototype_cols;
-        for (const auto &kv : data[0])
+        for (const auto &[key, value] : data[0])
         {
-            prototype_cols.emplace(kv.first);
+            prototype_cols.emplace(key);
         }
         for (const auto &row : data)
         {
             set<string> row_cols;
-            for (const auto &kv : row)
+            for (const auto &[key, value] : row)
             {
-                row_cols.emplace(kv.first);
+                row_cols.emplace(key);
             }
             if (prototype_cols != row_cols)
             {
@@ -74,9 +74,9 @@ struct DfRow : DataFrame
     virtual vector<string> cols() override
     {
         vector<string> result;
-        for (const auto &kv : data[0])
+        for (const auto &[key, value] : data[0])
         {
-            result.push_back(kv.first);
+            result.push_back(key);
         }
         return result;
     }
@@ -97,9 +97,9 @@ struct DfRow : DataFrame
         }
         for (size_t i = 0; i < data.size(); i++)
         {
-            for (const auto &kv : data[i])
+            for (const auto &[key, value] : data[i])
             {
-                if (other->get(kv.first, i) != kv.second)
+                if (other->get(key, i) != value)
                 {
                     return false;
                 }
@@ -115,7 +115,7 @@ struct DfRow : DataFrame
 
     virtual DataFrame* select(const set<string>& name_set) override
     {
-        vector<map<string, int>> result(data.size());
+        vector<unordered_map<string, int>> result(data.size());
         for (size_t i = 0; i < data.size(); i++)
         {
             for (const auto &name : name_set)
@@ -128,7 +128,7 @@ struct DfRow : DataFrame
 
     virtual DataFrame* filter(bool(*func)(DataFrame *df, size_t row)) override
     {
-        vector<map<string, int>> result;
+        vector<unordered_map<string, int>> result;
         for (size_t i = 0; i < data.size(); i++)
         {
             if (func(this, i))
@@ -142,23 +142,23 @@ struct DfRow : DataFrame
 
 struct DfCol : DataFrame
 {
-    map<string, vector<int>> data;
+    unordered_map<string, vector<int>> data;
 
-    DfCol(const map<string, vector<int>> &data) : data(data)
+    DfCol(const unordered_map<string, vector<int>> &data) : data(data)
     {
-        size_t first_size;
-        for (const auto &kv : data)
+        size_t first_size = 0;
+        for (const auto &[key, value] : data)
         {
-            first_size = kv.second.size();
+            first_size = value.size();
             break;
         }
         if (first_size == 0)
         {
             throw exception("empty column data");
         }
-        for (const auto &kv : data)
+        for (const auto &[key, value] : data)
         {
-            size_t size = kv.second.size();
+            size_t size = value.size();
             if (size != first_size)
             {
                 throw exception("size mismatch");
@@ -173,9 +173,9 @@ struct DfCol : DataFrame
 
     virtual size_t nrow() override
     {
-        for (const auto &kv : data)
+        for (const auto &[key, value] : data)
         {
-            return kv.second.size();
+            return value.size();
         }
         throw exception("unreachable");
     }
@@ -183,9 +183,9 @@ struct DfCol : DataFrame
     virtual vector<string> cols() override
     {
         vector<string> result;
-        for (const auto &kv : data)
+        for (const auto &[key, value] : data)
         {
-            result.push_back(kv.first);
+            result.push_back(key);
         }
         return result;
     }
@@ -204,11 +204,11 @@ struct DfCol : DataFrame
         {
             return false;
         }
-        for (const auto &kv : data)
+        for (const auto &[key, value] : data)
         {
-            for (size_t i = 0; i < kv.second.size(); i++)
+            for (size_t i = 0; i < value.size(); i++)
             {
-                if (other->get(kv.first, i) != kv.second[i])
+                if (other->get(key, i) != value[i])
                 {
                     return false;
                 }
@@ -224,7 +224,7 @@ struct DfCol : DataFrame
 
     virtual DataFrame* select(const set<string>& name_set) override
     {
-        map<string, vector<int>> result;
+        unordered_map<string, vector<int>> result;
         for (const auto &name : name_set)
         {
             result[name] = data[name];
@@ -234,15 +234,15 @@ struct DfCol : DataFrame
 
     virtual DataFrame* filter(bool(*func)(DataFrame *df, size_t row)) override
     {
-        map<string, vector<int>> result;
+        unordered_map<string, vector<int>> result;
         size_t nrow = this->nrow();
         for (size_t i = 0; i < nrow; i++)
         {
             if (func(this, i))
             {
-                for (const auto &kv : data)
+                for (const auto &[key, value] : data)
                 {
-                    result[kv.first].push_back(kv.second[i]);
+                    result[key].push_back(value[i]);
                 }
             }
         }
@@ -420,7 +420,7 @@ const size_t RANGE = 10;
 
 DataFrame *make_col(size_t nrow, size_t ncol)
 {
-    map<string, vector<int>> data;
+    unordered_map<string, vector<int>> data;
     vector<string> col_names;
     for (size_t c = 0; c < ncol; c++)
     {
@@ -438,15 +438,14 @@ DataFrame *make_col(size_t nrow, size_t ncol)
 
 DataFrame *make_row(size_t nrow, size_t ncol)
 {
-    vector<map<string, int>> data;
-    vector<string> col_names;
+    vector<unordered_map<string, int>> data(nrow);
+    vector<string> col_names(ncol);
     for (size_t c = 0; c < ncol; c++)
     {
-        col_names.push_back("label_" + to_string(c));
+        col_names[c] = "label_" + to_string(c);
     }
     for (size_t r = 0; r < nrow; r++)
     {
-        data.push_back({});
         for (size_t c = 0; c < ncol; c++)
         {
             data[r][col_names[c]] = (c + r) % RANGE;
@@ -492,7 +491,7 @@ void sweep()
 {
     const double NANO_TO_MS = 1.0 / 1000000.0;
 #if 1
-    vector<size_t> sizes = { 5, 10, 50, 100, 250, 500 };
+    vector<size_t> sizes = { 10, 50, 100, 500, 1000 };
 #else
     vector<size_t> sizes = { 10, 100, 1000, 2500 };
 #endif
@@ -502,6 +501,7 @@ void sweep()
     {
         DataFrame *df_col = make_col(size, size);
         DataFrame *df_row = make_row(size, size);
+        assert(df_col->eq(df_row) && df_row->eq(df_col));
         vector<double> times = {
             time_filter(df_col).count() * NANO_TO_MS,
             time_select(df_col).count() * NANO_TO_MS,
