@@ -560,6 +560,89 @@ void test_convert_row_to_col()
     delete df_row;
 }
 
+DfCol *join_col(DataFrame *left, string left_key, DataFrame *right, string right_key)
+{
+    size_t nrow_left = left->nrow();
+    size_t nrow_right = right->nrow();
+    unordered_map<string, vector<int>> data;
+    size_t out_index = 0;
+    for (int left_i = 0; left_i < nrow_left; left_i++)
+    {
+        for (int right_i = 0; right_i < nrow_left; right_i++)
+        {
+            if (left->get(left_key, left_i) == right->get(right_key, right_i))
+            {
+                for (const auto &col : left->cols())
+                {
+                    data[col].resize(out_index + 1);
+                    data[col][out_index] = left->get(col, left_i);
+                }
+                for (const auto &col : right->cols())
+                {
+                    data[col].resize(out_index + 1);
+                    data[col][out_index] = right->get(col, right_i);
+                }
+                out_index++;
+            }
+        }
+    }
+    return new DfCol(data);
+}
+
+DfRow *join_row(DataFrame *left, string left_key, DataFrame *right, string right_key)
+{
+    size_t nrow_left = left->nrow();
+    size_t nrow_right = right->nrow();
+    vector<unordered_map<string, int>> data;
+    size_t out_index = 0;
+    for (int left_i = 0; left_i < nrow_left; left_i++)
+    {
+        for (int right_i = 0; right_i < nrow_left; right_i++)
+        {
+            if (left->get(left_key, left_i) == right->get(right_key, right_i))
+            {
+                data.push_back({});
+                for (const auto &col : left->cols())
+                {
+                    data[out_index][col] = left->get(col, left_i);
+                }
+                for (const auto &col : right->cols())
+                {
+                    data[out_index][col] = right->get(col, right_i);
+                }
+                out_index++;
+            }
+        }
+    }
+    return new DfRow(data);
+}
+
+void test_join_col()
+{
+    DataFrame *left = new DfCol({ {"key", {1, 2, 3}}, {"left", {11, 21, 31}} });
+    DataFrame *right = new DfCol({ {"key", {1, 1, 2}}, {"right", {12, 13, 22}} });
+    DataFrame *expect = new DfCol({ {"key", {1, 1, 2}}, {"left", {11, 11, 21}}, {"right", {12, 13, 22}} });
+    DataFrame *joined = join_col(left, "key", right, "key");
+    assert(joined->eq(expect));
+    delete left;
+    delete right;
+    delete expect;
+    delete joined;
+}
+
+void test_join_row()
+{
+    DataFrame *left = new DfCol({ {"key", {1, 2, 3}}, {"left", {11, 21, 31}} });
+    DataFrame *right = new DfCol({ {"key", {1, 1, 2}}, {"right", {12, 13, 22}} });
+    DataFrame *expect = new DfCol({ {"key", {1, 1, 2}}, {"left", {11, 11, 21}}, {"right", {12, 13, 22}} });
+    DataFrame *joined = join_row(left, "key", right, "key");
+    assert(joined->eq(expect));
+    delete left;
+    delete right;
+    delete expect;
+    delete joined;
+}
+
 void profiling_main()
 {
     cout << "Performance Profiling:" << endl;
@@ -581,6 +664,8 @@ void profiling_main()
     test_dfcol_filter();
     test_convert_col_to_row();
     test_convert_row_to_col();
+    test_join_col();
+    test_join_row();
     cout << "All tests passed!" << endl;
     //sweep();
 }
