@@ -7,6 +7,7 @@
 #include <sstream>
 #include <vector>
 #include <map>
+#include <set>
 
 using namespace std;
 
@@ -25,15 +26,15 @@ struct PersistValue
     PersistType type;
     union
     {
-        bool bool_value;
-        long int_value;
-        double float_value;
+        void *ptr_value;
+        bool *bool_value;
+        long *int_value;
+        double *float_value;
         string *string_value;
         vector<PersistValue> *list_value;
         map<string, PersistValue> *dict_value;
     };
-
-    // TODO: Handle memory leaks, implement destructor and move operations
+    // TODO: Free memory properly!
 };
 
 bool operator!=(PersistValue const &left, PersistValue const &right);
@@ -46,9 +47,9 @@ bool operator==(PersistValue const &left, PersistValue const &right)
     }
     switch (right.type)
     {
-        case PT_bool: return left.bool_value == right.bool_value;
-        case PT_float: return left.float_value == right.float_value;
-        case PT_int: return left.int_value == right.int_value;
+        case PT_bool: return *left.bool_value == *right.bool_value;
+        case PT_float: return *left.float_value == *right.float_value;
+        case PT_int: return *left.int_value == *right.int_value;
         case PT_string: return *left.string_value == *right.string_value;
 
         case PT_list:
@@ -97,7 +98,7 @@ PersistValue val(bool value)
 {
     PersistValue result;
     result.type = PT_bool;
-    result.bool_value = value;
+    result.bool_value = new bool(value);
     return result;
 }
 
@@ -105,7 +106,7 @@ PersistValue val(int value)
 {
     PersistValue result;
     result.type = PT_int;
-    result.int_value = value;
+    result.int_value = new long(value);
     return result;
 }
 
@@ -113,7 +114,7 @@ PersistValue val(long value)
 {
     PersistValue result;
     result.type = PT_int;
-    result.int_value = value;
+    result.int_value = new long(value);
     return result;
 }
 
@@ -121,15 +122,15 @@ PersistValue val(double value)
 {
     PersistValue result;
     result.type = PT_float;
-    result.float_value = value;
+    result.float_value = new double(value);
     return result;
 }
 
-PersistValue val(string *value)
+PersistValue val(const string &value)
 {
     PersistValue result;
     result.type = PT_string;
-    result.string_value = value;
+    result.string_value = new string(value);
     return result;
 }
 
@@ -174,43 +175,75 @@ void save(ostream &writer, const string &s)
     writer << s << endl;
 }
 
-void save(ostream &writer, const PersistValue &thing)
+uint64_t id(PersistValue value)
 {
+    return (uint64_t)value.ptr_value;
+}
+
+void save(ostream &writer, const PersistValue &thing, bool aliasing = false, set<uint64_t> *context = nullptr)
+{
+    bool destroy_context = false;
+    string alias_str = "";
+    if (aliasing)
+    {
+        if (!context)
+        {
+            context = new set<uint64_t>;
+            destroy_context = true;
+        }
+        uint64_t alias = id(thing);
+        alias_str += to_string(alias);
+        alias_str += ":";
+        if (context->count(alias))
+        {
+            writer << "alias:" << alias_str << endl;
+            return;
+        }
+        else
+        {
+            context->emplace(alias);
+        }
+    }
     switch (thing.type)
     {
         case PT_bool:
-            writer << "bool:" << (thing.bool_value ? "True" : "False") << endl;
+            writer << "bool:" << alias_str << (*thing.bool_value ? "True" : "False") << endl;
             break;
         case PT_float:
-            writer << "float:" << thing.float_value << endl;
+            writer << "float:" << alias_str << *thing.float_value << endl;
             break;
         case PT_int:
-            writer << "int:" << thing.int_value << endl;
+            writer << "int:" << alias_str << *thing.int_value << endl;
             break;
         case PT_string:
-            writer << "str:" << (count_newlines(*thing.string_value) + 1) << endl;
+            writer << "str:" << alias_str << (count_newlines(*thing.string_value) + 1) << endl;
             writer << thing.string_value->c_str() << endl;
             break;
         case PT_list:
-            writer << "list:" << thing.list_value->size() << endl;
+            writer << "list:" << alias_str << thing.list_value->size() << endl;
             for (const auto &item : *thing.list_value)
             {
-                save(writer, item);
+                save(writer, item, aliasing, context);
             }
             break;
         case PT_dict:
-            writer << "dict:" << thing.dict_value->size() << endl;
+            writer << "dict:" << alias_str << thing.dict_value->size() << endl;
             for (const auto &[key, value] : *thing.dict_value)
             {
                 save(writer, key);
-                save(writer, value);
+                save(writer, value, aliasing, context);
             }
             break;
     }
+    if (destroy_context)
+    {
+        delete context;
+    }
 }
 
-PersistValue load(istream &reader)
+PersistValue load(istream &reader, bool aliasing = false, map<uint64_t,PersistValue> *context = nullptr)
 {
+    bool destroy_context = false;
     string line;
     reader >> line;
     size_t sep_offset = line.find(":");
@@ -219,34 +252,65 @@ PersistValue load(istream &reader)
         throw exception("invalid format");
     }
     string type = line.substr(0, sep_offset);
+    uint64_t alias = 0;
+
+    if (aliasing)
+    {
+        if (!context)
+        {
+            context = new map<uint64_t, PersistValue>;
+            destroy_context = true;
+        }
+        size_t alias_offset = line.find(":", sep_offset + 1);
+        if (sep_offset == string::npos)
+        {
+            throw exception("invalid aliasing format");
+        }
+        alias = atoll(line.substr(sep_offset + 1, alias_offset - sep_offset).c_str());
+        sep_offset = alias_offset;
+        if (type == "alias")
+        {
+            if (context->count(alias) == 0)
+            {
+                throw exception("invalid alias");
+            }
+            else
+            {
+                return context->at(alias);
+            }
+        }
+    }
+
     string content = line.substr(sep_offset + 1);
+    PersistValue result;
+
     if (type == "bool")
     {
-        return val(content == "True");
+        result = val(content == "True");
     }
     else if (type == "int")
     {
-        return val(atol(content.c_str()));
+        result = val(atol(content.c_str()));
     }
     else if (type == "float")
     {
-        return val(atof(content.c_str()));
+        result = val(atof(content.c_str()));
     }
     else if (type == "str")
     {
-        string *data = new string;
+        string data;
         int count = atol(content.c_str());
         for (int i = 0; i < count; i++)
         {
             string line;
             reader >> line;
-            *data += line;
+            data += line;
             if (i < count - 1)
             {
-                *data += "\n";
+                data += "\n";
             }
         }
-        return val(data);
+        result = val(data);
     }
     else if (type == "list")
     {
@@ -254,9 +318,9 @@ PersistValue load(istream &reader)
         vector<PersistValue> data(count);
         for (int i = 0; i < count; i++)
         {
-            data[i] = load(reader);
+            data[i] = load(reader, aliasing, context);
         }
-        return list(data);
+        result = list(data);
     }
     else if (type == "dict")
     {
@@ -265,14 +329,28 @@ PersistValue load(istream &reader)
         for (int i = 0; i < count; i++)
         {
             PersistValue key = load(reader);
-            PersistValue value = load(reader);
+            PersistValue value = load(reader, aliasing, context);
             assert(key.type == PT_string);
             data[*key.string_value] = value;
             // TODO: discard key object...
         }
-        return dict(data);
+        result = dict(data);
     }
-    throw exception("invalid data type");
+    else
+    {
+        throw exception("invalid data type");
+    }
+
+    if (aliasing)
+    {
+        context->emplace(alias, result);
+        if (destroy_context)
+        {
+            delete context;
+        }
+    }
+
+    return result;
 }
 
 void test_save_list_flat()
@@ -333,10 +411,39 @@ void test_load_list_flat()
     assert(result == expect);
 }
 
+PersistValue roundtrip(PersistValue fixture)
+{
+    stringstream buffer;
+    save(buffer, fixture, true);
+    //cout << buffer.str();
+    PersistValue result = load(buffer, true);
+    return result;
+}
+
+void test_aliasing_no_aliasing()
+{
+    auto fixture = list({ val("a"),dict({{ "b", val(true)},{"7", dict({{"c", val("d")}}) }}) });
+    auto result = roundtrip(fixture);
+    assert(result == fixture);
+}
+
+void test_aliasing_shared_child()
+{
+    auto shared = list({ val("content") });
+    auto fixture = list({ shared, shared });
+    auto result = roundtrip(fixture);
+    assert(result == fixture);
+    assert(id(result.list_value->at(0)) == id(result.list_value->at(1)));
+    result.list_value->at(0).list_value->at(0).string_value = new string("changed");
+    assert(*result.list_value->at(1).list_value->at(0).string_value == "changed");
+}
+
 void persist_main()
 {
     cout << "Object Persistence:" << endl;
     test_save_list_flat();
     test_load_list_flat();
+    test_aliasing_no_aliasing();
+    test_aliasing_shared_child();
     cout << "All tests passed!" << endl;
 }
