@@ -167,6 +167,7 @@
     <ClCompile Include="HTMLValidator.cpp" />
     <ClCompile Include="Interpreter.cpp" />
     <ClCompile Include="MatchingPatterns.cpp" />
+    <ClCompile Include="ObjectPersistence.cpp" />
     <ClCompile Include="ObjectsAndClasses.cpp" />
     <ClCompile Include="PageLayout.cpp" />
     <ClCompile Include="ParsingText.cpp" />

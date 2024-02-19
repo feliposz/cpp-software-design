@@ -9,6 +9,7 @@ void validator_main();
 void template_main();
 void layout_main();
 void profiling_main();
+void persist_main();
 
 int main()
 {
@@ -22,6 +23,7 @@ int main()
     //validator_main();
     //template_main();
     //layout_main();
-    profiling_main();
+    //profiling_main();
+    persist_main();
     return 0;
 }
