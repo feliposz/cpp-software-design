@@ -28,10 +28,12 @@ struct PersistValue
         bool bool_value;
         long int_value;
         double float_value;
+        string *string_value;
+        vector<PersistValue> *list_value;
+        map<string, PersistValue> *dict_value;
     };
-    string string_value;
-    vector<PersistValue> list_value;
-    map<string, PersistValue> dict_value;
+
+    // TODO: Handle memory leaks, implement destructor and move operations
 };
 
 bool operator!=(PersistValue const &left, PersistValue const &right);
@@ -47,18 +49,18 @@ bool operator==(PersistValue const &left, PersistValue const &right)
         case PT_bool: return left.bool_value == right.bool_value;
         case PT_float: return left.float_value == right.float_value;
         case PT_int: return left.int_value == right.int_value;
-        case PT_string: return left.string_value == right.string_value;
+        case PT_string: return *left.string_value == *right.string_value;
 
         case PT_list:
         {
-            int count = left.list_value.size();
-            if (count != right.list_value.size())
+            int count = left.list_value->size();
+            if (count != right.list_value->size())
             {
                 return false;
             }
             for (int i = 0; i < count; i++)
             {
-                if (left.list_value[i] != right.list_value[i])
+                if (left.list_value->at(i) != right.list_value->at(i))
                 {
                     return false;
                 }
@@ -68,14 +70,14 @@ bool operator==(PersistValue const &left, PersistValue const &right)
 
         case PT_dict: 
         {
-            int count = left.dict_value.size();
-            if (count != right.dict_value.size())
+            int count = left.dict_value->size();
+            if (count != right.dict_value->size())
             {
                 return false;
             }
-            for (const auto &[key, value] : left.dict_value)
+            for (const auto &[key, value] : *left.dict_value)
             {
-                if ((right.dict_value.count(key) == 0) || (right.dict_value.at(key) != value))
+                if ((right.dict_value->count(key) == 0) || (right.dict_value->at(key) != value))
                 {
                     return false;
                 }
@@ -123,7 +125,7 @@ PersistValue val(double value)
     return result;
 }
 
-PersistValue val(const string &value)
+PersistValue val(string *value)
 {
     PersistValue result;
     result.type = PT_string;
@@ -135,24 +137,24 @@ PersistValue val(const char *value)
 {
     PersistValue result;
     result.type = PT_string;
-    result.string_value = value;
+    result.string_value = new string(value);
     return result;
 }
 
-PersistValue list(const vector<PersistValue> &value)
+PersistValue list(const vector<PersistValue> value)
 {
     PersistValue result;
     result.type = PT_list;
-    result.list_value = value;
+    result.list_value = new vector<PersistValue>(value);
     return result;
 }
 
 
-PersistValue dict(const map<string, PersistValue> &value)
+PersistValue dict(const map<string, PersistValue> value)
 {
     PersistValue result;
     result.type = PT_dict;
-    result.dict_value = value;
+    result.dict_value = new map<string, PersistValue>(value);
     return result;
 }
 
@@ -164,6 +166,12 @@ int count_newlines(const string &s)
         if (c == '\n') newlines++;
     }
     return newlines;
+}
+
+void save(ostream &writer, const string &s)
+{
+    writer << "str:" << (count_newlines(s) + 1) << endl;
+    writer << s << endl;
 }
 
 void save(ostream &writer, const PersistValue &thing)
@@ -180,21 +188,21 @@ void save(ostream &writer, const PersistValue &thing)
             writer << "int:" << thing.int_value << endl;
             break;
         case PT_string:
-            writer << "str:" << (count_newlines(thing.string_value) + 1) << endl;
-            writer << thing.string_value.c_str() << endl;
+            writer << "str:" << (count_newlines(*thing.string_value) + 1) << endl;
+            writer << thing.string_value->c_str() << endl;
             break;
         case PT_list:
-            writer << "list:" << thing.list_value.size() << endl;
-            for (const auto &item : thing.list_value)
+            writer << "list:" << thing.list_value->size() << endl;
+            for (const auto &item : *thing.list_value)
             {
                 save(writer, item);
             }
             break;
         case PT_dict:
-            writer << "dict:" << thing.dict_value.size() << endl;
-            for (const auto &[key, value] : thing.dict_value)
+            writer << "dict:" << thing.dict_value->size() << endl;
+            for (const auto &[key, value] : *thing.dict_value)
             {
-                save(writer, val(key));
+                save(writer, key);
                 save(writer, value);
             }
             break;
@@ -226,16 +234,16 @@ PersistValue load(istream &reader)
     }
     else if (type == "str")
     {
-        string data;
+        string *data = new string;
         int count = atol(content.c_str());
         for (int i = 0; i < count; i++)
         {
             string line;
             reader >> line;
-            data += line;
+            *data += line;
             if (i < count - 1)
             {
-                data += "\n";
+                *data += "\n";
             }
         }
         return val(data);
@@ -259,7 +267,8 @@ PersistValue load(istream &reader)
             PersistValue key = load(reader);
             PersistValue value = load(reader);
             assert(key.type == PT_string);
-            data[key.string_value] = value;
+            data[*key.string_value] = value;
+            // TODO: discard key object...
         }
         return dict(data);
     }
@@ -319,8 +328,8 @@ void test_load_list_flat()
        val("hello"),
        dict({ {"left", val(1)}, {"right", list({val(2), val(3)}) } }) });
 
-    stringstream ss(data);
-    PersistValue result = load(ss);
+    stringstream data_reader(data);
+    PersistValue result = load(data_reader);
     assert(result == expect);
 }
 
