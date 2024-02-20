@@ -8,6 +8,7 @@
 #include <vector>
 #include <map>
 #include <set>
+#include <memory>
 
 using namespace std;
 
@@ -24,17 +25,13 @@ enum PersistType
 struct PersistValue
 {
     PersistType type;
-    union
-    {
-        void *ptr_value;
-        bool *bool_value;
-        long *int_value;
-        double *float_value;
-        string *string_value;
-        vector<PersistValue> *list_value;
-        map<string, PersistValue> *dict_value;
-    };
-    // TODO: Free memory properly!
+    // TODO: Is there a safe way to collapse these?
+    shared_ptr<bool> bool_value;
+    shared_ptr<long> int_value;
+    shared_ptr<double> float_value;
+    shared_ptr<string> string_value;
+    shared_ptr<vector<PersistValue>> list_value;
+    shared_ptr<map<string, PersistValue>> dict_value;
 };
 
 bool operator!=(PersistValue const &left, PersistValue const &right);
@@ -98,7 +95,7 @@ PersistValue val(bool value)
 {
     PersistValue result;
     result.type = PT_bool;
-    result.bool_value = new bool(value);
+    result.bool_value = make_unique<bool>(value);
     return result;
 }
 
@@ -106,7 +103,7 @@ PersistValue val(int value)
 {
     PersistValue result;
     result.type = PT_int;
-    result.int_value = new long(value);
+    result.int_value = make_unique<long>(value);
     return result;
 }
 
@@ -114,7 +111,7 @@ PersistValue val(long value)
 {
     PersistValue result;
     result.type = PT_int;
-    result.int_value = new long(value);
+    result.int_value = make_unique<long>(value);
     return result;
 }
 
@@ -122,7 +119,7 @@ PersistValue val(double value)
 {
     PersistValue result;
     result.type = PT_float;
-    result.float_value = new double(value);
+    result.float_value = make_unique<double>(value);
     return result;
 }
 
@@ -130,7 +127,7 @@ PersistValue val(const string &value)
 {
     PersistValue result;
     result.type = PT_string;
-    result.string_value = new string(value);
+    result.string_value = make_unique<string>(value);
     return result;
 }
 
@@ -138,24 +135,24 @@ PersistValue val(const char *value)
 {
     PersistValue result;
     result.type = PT_string;
-    result.string_value = new string(value);
+    result.string_value = make_unique<string>(value);
     return result;
 }
 
-PersistValue list(const vector<PersistValue> value)
+PersistValue list(const vector<PersistValue> &value)
 {
     PersistValue result;
     result.type = PT_list;
-    result.list_value = new vector<PersistValue>(value);
+    result.list_value = make_unique<vector<PersistValue>>(value);
     return result;
 }
 
 
-PersistValue dict(const map<string, PersistValue> value)
+PersistValue dict(const map<string, PersistValue> &value)
 {
     PersistValue result;
     result.type = PT_dict;
-    result.dict_value = new map<string, PersistValue>(value);
+    result.dict_value = make_unique<map<string, PersistValue>>(value);
     return result;
 }
 
@@ -175,21 +172,27 @@ void save(ostream &writer, const string &s)
     writer << s << endl;
 }
 
-uint64_t id(PersistValue value)
+uint64_t id(const PersistValue &value)
 {
-    return (uint64_t)value.ptr_value;
+    switch (value.type)
+    {
+        case PT_bool: return (uint64_t)value.bool_value.get();
+        case PT_float: return (uint64_t)value.float_value.get();
+        case PT_int: return (uint64_t)value.int_value.get();
+        case PT_string: return (uint64_t)value.string_value.get();
+        case PT_list: return (uint64_t)value.list_value.get();
+        case PT_dict: return (uint64_t)value.dict_value.get();
+    }
 }
 
-void save(ostream &writer, const PersistValue &thing, bool aliasing = false, set<uint64_t> *context = nullptr)
+void save(ostream &writer, const PersistValue &thing, bool aliasing = false, shared_ptr<set<uint64_t>> context = nullptr)
 {
-    bool destroy_context = false;
     string alias_str = "";
     if (aliasing)
     {
         if (!context)
         {
-            context = new set<uint64_t>;
-            destroy_context = true;
+            context = make_shared<set<uint64_t>>();
         }
         uint64_t alias = id(thing);
         alias_str += to_string(alias);
@@ -235,13 +238,9 @@ void save(ostream &writer, const PersistValue &thing, bool aliasing = false, set
             }
             break;
     }
-    if (destroy_context)
-    {
-        delete context;
-    }
 }
 
-PersistValue load(istream &reader, bool aliasing = false, map<uint64_t,PersistValue> *context = nullptr)
+PersistValue load(istream &reader, bool aliasing = false, shared_ptr<map<uint64_t,PersistValue>> context = nullptr)
 {
     bool destroy_context = false;
     string line;
@@ -258,8 +257,7 @@ PersistValue load(istream &reader, bool aliasing = false, map<uint64_t,PersistVa
     {
         if (!context)
         {
-            context = new map<uint64_t, PersistValue>;
-            destroy_context = true;
+            context = make_shared<map<uint64_t, PersistValue>>();
         }
         size_t alias_offset = line.find(":", sep_offset + 1);
         if (sep_offset == string::npos)
@@ -332,7 +330,6 @@ PersistValue load(istream &reader, bool aliasing = false, map<uint64_t,PersistVa
             PersistValue value = load(reader, aliasing, context);
             assert(key.type == PT_string);
             data[*key.string_value] = value;
-            // TODO: discard key object...
         }
         result = dict(data);
     }
@@ -344,10 +341,6 @@ PersistValue load(istream &reader, bool aliasing = false, map<uint64_t,PersistVa
     if (aliasing)
     {
         context->emplace(alias, result);
-        if (destroy_context)
-        {
-            delete context;
-        }
     }
 
     return result;
@@ -434,7 +427,7 @@ void test_aliasing_shared_child()
     auto result = roundtrip(fixture);
     assert(result == fixture);
     assert(id(result.list_value->at(0)) == id(result.list_value->at(1)));
-    result.list_value->at(0).list_value->at(0).string_value = new string("changed");
+    result.list_value->at(0).list_value->at(0).string_value = make_shared<string>("changed");
     assert(*result.list_value->at(1).list_value->at(0).string_value == "changed");
 }
 
