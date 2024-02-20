@@ -10,20 +10,22 @@ void template_main();
 void layout_main();
 void profiling_main();
 void persist_main();
+void binary_main();
 
 int main()
 {
-    objects_main();
-    duplicate_main();
-    matching_main();
-    parsing_main();
-    tests_main();
-    interpreter_main();
-    archiver_main();
-    validator_main();
-    template_main();
-    layout_main();
-    profiling_main();
-    persist_main();
+    //objects_main();
+    //duplicate_main();
+    //matching_main();
+    //parsing_main();
+    //tests_main();
+    //interpreter_main();
+    //archiver_main();
+    //validator_main();
+    //template_main();
+    //layout_main();
+    //profiling_main();
+    //persist_main();
+    binary_main();
     return 0;
 }
