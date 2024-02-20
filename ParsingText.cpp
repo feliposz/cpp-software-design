@@ -119,7 +119,7 @@ struct Parser
         return _parse(tokenizer.tokens);
     }
 
-    Match *_parse(vector<Token*> &tokens, int start = 0)
+    Match *_parse(vector<Token*> &tokens, size_t start = 0)
     {
         if (start >= tokens.size())
         {

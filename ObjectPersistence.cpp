@@ -24,7 +24,7 @@ enum PersistType
 
 struct PersistValue
 {
-    PersistType type;
+    PersistType type = PT_bool;
     // TODO: Is there a safe way to collapse these?
     shared_ptr<bool> bool_value;
     shared_ptr<long> int_value;
@@ -51,7 +51,7 @@ bool operator==(PersistValue const &left, PersistValue const &right)
 
         case PT_list:
         {
-            int count = left.list_value->size();
+            size_t count = left.list_value->size();
             if (count != right.list_value->size())
             {
                 return false;
@@ -68,7 +68,7 @@ bool operator==(PersistValue const &left, PersistValue const &right)
 
         case PT_dict: 
         {
-            int count = left.dict_value->size();
+            size_t count = left.dict_value->size();
             if (count != right.dict_value->size())
             {
                 return false;
@@ -183,6 +183,7 @@ uint64_t id(const PersistValue &value)
         case PT_list: return (uint64_t)value.list_value.get();
         case PT_dict: return (uint64_t)value.dict_value.get();
     }
+    throw exception("invalid data type");
 }
 
 void save(ostream &writer, const PersistValue &thing, bool aliasing = false, shared_ptr<set<uint64_t>> context = nullptr)

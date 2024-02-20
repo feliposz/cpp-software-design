@@ -17,7 +17,7 @@ inline int max(int a, int b)
 class IRect
 {
 protected:
-    int x0, y0;
+    int x0 = 0, y0 = 0;
 public:
     virtual ~IRect() = default;
     virtual int get_width() = 0;
@@ -28,9 +28,9 @@ public:
 
     void render(vector<string> &screen, char fill = 'a')
     {
-        for (int y = 0; y < get_height(); y++)
+        for (size_t y = 0; y < get_height(); y++)
         {
-            for (int x = 0; x < get_width(); x++)
+            for (size_t x = 0; x < get_width(); x++)
             {
                 screen[y0 + y][x0 + x] = fill;
             }

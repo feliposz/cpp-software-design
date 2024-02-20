@@ -53,7 +53,7 @@ struct environment
                 return (*s)[identifier];
             }
         }
-        assert(!"undeclared");
+        throw exception("undeclared");
     }
 };
 
@@ -199,7 +199,7 @@ json eval_call(json &expr, environment &env)
         env.pop();
         return result;
     }
-    assert(!"unknown function");
+    throw exception("unknown function");
 }
 
 map<string, json(*)(json&, environment&)> ops = {
@@ -236,7 +236,7 @@ json eval(json &expr, environment &env)
         return result;
     }
     
-    assert(!"Unknown operation");    
+    throw exception("Unknown operation");
 }
 
 void interpreter_main()

@@ -10,7 +10,7 @@ using namespace std;
 
 struct Match
 {
-    Match *rest;
+    Match *rest = nullptr;
 
     virtual ~Match() = default;
 
@@ -25,11 +25,6 @@ struct Match
 
 struct Null : Match
 {
-    Null()
-    {
-        this->rest = nullptr;
-    }
-
     ~Null() override
     {
     }

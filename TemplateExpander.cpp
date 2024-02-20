@@ -72,7 +72,7 @@ public:
                 return (*s)[identifier];
             }
         }
-        assert(!"undeclared");
+        throw exception("undeclared");
     }
 };
 
