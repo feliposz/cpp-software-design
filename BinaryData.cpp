@@ -119,45 +119,73 @@ vector<uint8_t> binary_pack(char const* const format, ...)
     va_start(args, format);
     for (int i = 0; format[i]; i++)
     {
-        switch (format[i])
+        int count = 0;
+        while (isdigit(format[i]))
         {
-            case 'c':
-            case 'B':
-            {
-                uint8_t value = va_arg(args, uint8_t);
-                result.push_back((uint8_t)(value & 0xFF));
-            } break;
-            
-            case 'h':
-            {
-                uint16_t value = va_arg(args, uint16_t);
-                result.push_back((uint8_t)(value & 0xFF));
-                result.push_back((uint8_t)(value >> 8 & 0xFF));
-            } break;
+            count = count * 10 + format[i] - '0';
+            i++;
+        }
+        if (count == 0)
+        {
+            count = 1;
+        }
 
-            case 'i':
+        if (format[i] == 's')
+        {
+            char *value = va_arg(args, char *);
+            for (int j = 0; j < count; j++)
             {
-                uint32_t value = va_arg(args, uint32_t);
-                result.push_back((uint8_t)(value & 0xFF));
-                result.push_back((uint8_t)(value >> 8 & 0xFF));
-                result.push_back((uint8_t)(value >> 16 & 0xFF));
-                result.push_back((uint8_t)(value >> 24 & 0xFF));
-            } break;
+                result.push_back((uint8_t)(value[j]));
+            }
+        }
+        else
+        {
+            for (int j = 0; j < count; j++)
+            {
+                switch (format[i])
+                {
+                    case 'c':
+                    case 'B':
+                    {
+                        uint8_t value = va_arg(args, uint8_t);
+                        result.push_back((uint8_t)(value & 0xFF));
+                    } break;
 
-            case 'd':
-            {
-                assert(sizeof(uint64_t) == sizeof(double));
-                double original = va_arg(args, double);
-                uint64_t value = *((uint64_t*)&original);
-                result.push_back((uint8_t)(value & 0xFF));
-                result.push_back((uint8_t)(value >> 8 & 0xFF));
-                result.push_back((uint8_t)(value >> 16 & 0xFF));
-                result.push_back((uint8_t)(value >> 24 & 0xFF));
-                result.push_back((uint8_t)(value >> 32 & 0xFF));
-                result.push_back((uint8_t)(value >> 40 & 0xFF));
-                result.push_back((uint8_t)(value >> 48 & 0xFF));
-                result.push_back((uint8_t)(value >> 56 & 0xFF));
-            } break;
+                    case 'h':
+                    {
+                        uint16_t value = va_arg(args, uint16_t);
+                        result.push_back((uint8_t)(value & 0xFF));
+                        result.push_back((uint8_t)(value >> 8 & 0xFF));
+                    } break;
+
+                    case 'i':
+                    {
+                        uint32_t value = va_arg(args, uint32_t);
+                        result.push_back((uint8_t)(value & 0xFF));
+                        result.push_back((uint8_t)(value >> 8 & 0xFF));
+                        result.push_back((uint8_t)(value >> 16 & 0xFF));
+                        result.push_back((uint8_t)(value >> 24 & 0xFF));
+                    } break;
+
+                    case 'd':
+                    {
+                        assert(sizeof(uint64_t) == sizeof(double));
+                        double original = va_arg(args, double);
+                        uint64_t value = *((uint64_t*)&original);
+                        result.push_back((uint8_t)(value & 0xFF));
+                        result.push_back((uint8_t)(value >> 8 & 0xFF));
+                        result.push_back((uint8_t)(value >> 16 & 0xFF));
+                        result.push_back((uint8_t)(value >> 24 & 0xFF));
+                        result.push_back((uint8_t)(value >> 32 & 0xFF));
+                        result.push_back((uint8_t)(value >> 40 & 0xFF));
+                        result.push_back((uint8_t)(value >> 48 & 0xFF));
+                        result.push_back((uint8_t)(value >> 56 & 0xFF));
+                    } break;
+
+                    default:
+                        throw exception("invalid format");
+                }
+            }
         }
     }
     va_end(args);
@@ -171,46 +199,75 @@ void binary_unpack(const vector<uint8_t> &bytes, char const* const format, ...)
     size_t position = 0;
     for (int i = 0; format[i]; i++)
     {
-        switch (format[i])
+        int count = 0;
+        while (isdigit(format[i]))
         {
-            case 'c':
-            case 'B':
-            {
-                uint8_t *dest = va_arg(args, uint8_t*);
-                *dest = bytes[position++];
-            } break;
+            count = count * 10 + format[i] - '0';
+            i++;
+        }
+        if (count == 0)
+        {
+            count = 1;
+        }
 
-            case 'h':
+        if (format[i] == 's')
+        {
+            char *dest = va_arg(args, char *);
+            for (int j = 0; j < count; j++)
             {
-                uint16_t *dest = va_arg(args, uint16_t*);
-                *dest = bytes[position++];
-                *dest |= bytes[position++] << 8;
-            } break;
+                dest[j] = (char)bytes[position++];
+            }
+            // NOTE: Adding a null terminator is left to caller to avoid undesired memory overwriting!
+        }
+        else
+        {
+            for (int j = 0; j < count; j++)
+            {
+                switch (format[i])
+                {
+                    case 'c':
+                    case 'B':
+                    {
+                        uint8_t *dest = va_arg(args, uint8_t*);
+                        *dest = bytes[position++];
+                    } break;
 
-            case 'i':
-            {
-                uint32_t *dest = va_arg(args, uint32_t*);
-                *dest = bytes[position++];
-                *dest |= bytes[position++] << 8;
-                *dest |= bytes[position++] << 16;
-                *dest |= bytes[position++] << 24;
-            } break;
+                    case 'h':
+                    {
+                        uint16_t *dest = va_arg(args, uint16_t*);
+                        *dest = bytes[position++];
+                        *dest |= bytes[position++] << 8;
+                    } break;
 
-            case 'd':
-            {
-                assert(sizeof(uint64_t) == sizeof(double));
-                double *dest = va_arg(args, double*);
-                uint64_t temp = 0;
-                temp = bytes[position++];
-                temp |= (uint64_t)(bytes[position++]) << 8;
-                temp |= (uint64_t)(bytes[position++]) << 16;
-                temp |= (uint64_t)(bytes[position++]) << 24;
-                temp |= (uint64_t)(bytes[position++]) << 32;
-                temp |= (uint64_t)(bytes[position++]) << 40;
-                temp |= (uint64_t)(bytes[position++]) << 48;
-                temp |= (uint64_t)(bytes[position++]) << 56;
-                *dest = *((double *)&temp);
-            } break;
+                    case 'i':
+                    {
+                        uint32_t *dest = va_arg(args, uint32_t*);
+                        *dest = bytes[position++];
+                        *dest |= bytes[position++] << 8;
+                        *dest |= bytes[position++] << 16;
+                        *dest |= bytes[position++] << 24;
+                    } break;
+
+                    case 'd':
+                    {
+                        assert(sizeof(uint64_t) == sizeof(double));
+                        double *dest = va_arg(args, double*);
+                        uint64_t temp = 0;
+                        temp = bytes[position++];
+                        temp |= (uint64_t)(bytes[position++]) << 8;
+                        temp |= (uint64_t)(bytes[position++]) << 16;
+                        temp |= (uint64_t)(bytes[position++]) << 24;
+                        temp |= (uint64_t)(bytes[position++]) << 32;
+                        temp |= (uint64_t)(bytes[position++]) << 40;
+                        temp |= (uint64_t)(bytes[position++]) << 48;
+                        temp |= (uint64_t)(bytes[position++]) << 56;
+                        *dest = *((double *)&temp);
+                    } break;
+
+                    default:
+                        throw exception("invalid format");
+                }
+            }
         }
     }
     va_end(args);
@@ -257,6 +314,20 @@ void test_pack()
     assert(d == 3.14159);
 }
 
+void test_pack_count()
+{
+    auto bytes = binary_pack("i2d5s", 12345, 1.5, -3.7, "hello");
+    binary_dump(bytes);
+    int i;
+    double d[2];
+    char s[5];
+    binary_unpack(bytes, "i2d5s", &i, &d[0], &d[1], s);
+    assert(i == 12345);
+    assert(d[0] == 1.5);
+    assert(d[1] == -3.7);
+    assert(strncmp("hello", s, 5) == 0);
+}
+
 void binary_main()
 {
     cout << "Binary Data:" << endl;
@@ -264,5 +335,6 @@ void binary_main()
     bitwise_operations();
     unicode_examples();
     test_pack();
+    test_pack_count();
     cout << "All tests passed" << endl;
 }
