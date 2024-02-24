@@ -90,7 +90,11 @@ public:
 
     BasicRecord get(const string &key) override
     {
-        BasicRecord result = data[key];
+        BasicRecord result;
+        if (data.count(key))
+        {
+            result = data.at(key);
+        }
         return result;
     }
 };
@@ -149,6 +153,70 @@ private:
             writer.close();
             delete[] buffer;
         }
+    }
+};
+
+class BlockDb : public Database
+{
+protected:
+    size_t next_id = 0;
+    map<string, size_t> index;
+    vector<map<size_t, BasicRecord>> blocks;
+
+public:
+    constexpr static size_t records_per_block = 2;
+
+    size_t size()
+    {
+        return records_per_block;
+    }
+
+    size_t num_blocks()
+    {
+        return blocks.size();
+    }
+
+    size_t num_records()
+    {
+        return index.size();
+    }
+
+    size_t get_block_id(size_t seq_id)
+    {
+        return seq_id / records_per_block;
+    }
+
+    map<size_t, BasicRecord>& get_block(size_t bloq_id)
+    {
+        while (bloq_id >= blocks.size())
+        {
+            blocks.push_back({});
+        }
+        return blocks.at(bloq_id);
+    }
+
+    virtual void add(const BasicRecord & record) override
+    {
+        string key = record.key();
+        size_t seq_id = next_id++;
+        index.emplace(key, seq_id);
+        size_t block_id = get_block_id(seq_id);
+        auto &block = get_block(block_id);
+        block.emplace(seq_id, record);
+    }
+
+    virtual BasicRecord get(const string & key) override
+    {
+        BasicRecord result;
+        if (index.count(key) == 0)
+        {
+            return result;
+        }
+        size_t seq_id = index.at(key);
+        size_t block_id = get_block_id(seq_id);
+        auto &block = get_block(block_id);
+        result = block.at(seq_id);
+        return result;
     }
 };
 
@@ -211,6 +279,20 @@ void test_filedb()
     filesystem::remove(db_file_path);
 }
 
+void test_blocked()
+{
+    BlockDb db;
+    BasicRecord ex01{ "ex01", 12345, {1, 2} };
+    BasicRecord ex02{ "ex02", 67890, {3, 4} };
+    BasicRecord ex03{ "ex03", 77777, {7, 7} };
+    db.add(ex01);
+    db.add(ex02);
+    db.add(ex03);
+    assert(db.get("ex01") == ex01);
+    assert(db.get("ex02") == ex02);
+    assert(db.get("ex03") == ex03);
+}
+
 void database_main()
 {
     cout << "Database:" << endl;
@@ -219,5 +301,6 @@ void database_main()
     test_add_two_then_get_both();
     test_add_then_overwrite();
     test_filedb();
+    test_blocked();
     cout << "All tests passed" << endl;
 }
