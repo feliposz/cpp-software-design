@@ -6,6 +6,7 @@
 #include <iostream>
 #include <fstream>
 #include <map>
+#include <set>
 #include <string>
 
 // requires: /std:c++17
@@ -220,6 +221,121 @@ public:
     }
 };
 
+class BlockFileDb : public BlockDb
+{
+    filesystem::path db_dir;
+
+public:
+    BlockFileDb(const filesystem::path &db_dir) : db_dir(db_dir)
+    {
+        build_index();
+    }
+
+    virtual void add(const BasicRecord & record) override
+    {
+        BlockDb::add(record);
+        save(record);
+    }
+
+    virtual BasicRecord get(const string & key) override
+    {
+        if (index.count(key) == 0)
+        {
+            load(key);
+        }
+        return BlockDb::get(key);
+    }
+
+private:
+    void build_index()
+    {
+        set<filesystem::path> files;
+        for (const auto &entry : filesystem::directory_iterator(db_dir))
+        {
+            if (entry.is_regular_file())
+            {
+                auto extension = entry.path().extension();
+                if (extension == L".db")
+                {
+                    files.emplace(entry.path());
+                }
+            }
+        }
+        for (const auto &file : files)
+        {
+            size_t block_id = _wtoi(file.stem().c_str());
+            load_block(block_id);
+        }
+    }
+
+    filesystem::path get_file_path(size_t block_id)
+    {
+        filesystem::path result(db_dir);
+        result /= to_string(block_id);
+        result += ".db";
+        return result;
+    }
+
+    void save(const BasicRecord & record)
+    {
+        string key = record.key();
+        size_t seq_id = index.at(key);
+        size_t block_id = get_block_id(seq_id);
+        save_block(block_id);
+    }
+
+    void load(const string &key)
+    {
+        size_t seq_id = index.at(key);
+        size_t block_id = get_block_id(seq_id);
+        load_block(block_id);
+    }
+
+    void save_block(size_t block_id)
+    {
+        auto &block = get_block(block_id);
+        auto file_path = get_file_path(block_id);
+        ofstream writer(file_path.c_str(), ios_base::binary);
+        if (writer.is_open())
+        {
+            size_t record_size = BasicRecord::packed_size;
+            size_t total_size = block.size() * record_size;
+            size_t offset = 0;
+            char *buffer = new char[total_size];
+            for (const auto &[key, value] : block)
+            {
+                value.pack(buffer + offset);
+                offset += record_size;
+            }
+            writer.write(buffer, total_size);
+            writer.close();
+            delete[] buffer;
+        }
+    }
+
+    void load_block(size_t block_id)
+    {
+        auto &block = get_block(block_id);
+        auto file_path = get_file_path(block_id);
+        ifstream reader(file_path.c_str(), ios_base::binary);
+        if (reader.is_open())
+        {
+            reader.seekg(0, ios_base::end);
+            size_t total_size = (size_t)reader.tellg();
+            char *buffer = new char[total_size];
+            reader.seekg(0, ios_base::beg);
+            reader.read(buffer, total_size);
+            reader.close();
+            size_t record_size = BasicRecord::packed_size;
+            for (size_t offset = 0; offset < total_size; offset += record_size)
+            {
+                BlockDb::add(BasicRecord::unpack(buffer + offset));
+            }
+            delete[] buffer;
+        }
+    }
+};
+
 void test_get_nothing_from_empty_db()
 {
     MemDb db;
@@ -279,7 +395,7 @@ void test_filedb()
     filesystem::remove(db_file_path);
 }
 
-void test_blocked()
+void test_blockdb()
 {
     BlockDb db;
     BasicRecord ex01{ "ex01", 12345, {1, 2} };
@@ -293,6 +409,33 @@ void test_blocked()
     assert(db.get("ex03") == ex03);
 }
 
+void test_blockfiledb()
+{
+    filesystem::path db_dir_path = filesystem::temp_directory_path();
+    db_dir_path.append("sdbxdb");
+    filesystem::create_directory(db_dir_path);
+
+    BasicRecord ex01{ "ex01", 12345, {1, 2} };
+    BasicRecord ex02{ "ex02", 67890, {3, 4} };
+    BasicRecord ex03{ "ex03", 77777, {7, 7} };
+
+    {
+        BlockFileDb db(db_dir_path);
+        db.add(ex01);
+        db.add(ex02);
+        db.add(ex03);
+    }
+
+    {
+        BlockFileDb db(db_dir_path);
+        assert(db.get("ex01") == ex01);
+        assert(db.get("ex02") == ex02);
+        assert(db.get("ex03") == ex03);
+    }
+    
+    filesystem::remove_all(db_dir_path);
+}
+
 void database_main()
 {
     cout << "Database:" << endl;
@@ -301,6 +444,7 @@ void database_main()
     test_add_two_then_get_both();
     test_add_then_overwrite();
     test_filedb();
-    test_blocked();
+    test_blockdb();
+    test_blockfiledb();
     cout << "All tests passed" << endl;
 }
