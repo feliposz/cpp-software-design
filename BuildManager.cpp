@@ -16,6 +16,7 @@ struct BuildTarget
     string name;
     vector<string> depends;
     string rule;
+    int timestamp = -1;
 };
 
 typedef vector<BuildTarget> BuildConfig;
@@ -55,7 +56,27 @@ public:
         vector<string> ordered = topo_sort();
         for (const string &target : ordered)
         {
-            result.push_back(targets.at(target).rule);
+            auto &current = targets[target];
+            bool needs_update = false;
+            if (current.timestamp == -1) // Forced update
+            {
+                needs_update = true;
+            }
+            else
+            {
+                for (const string &depend : current.depends)
+                {
+                    if (current.timestamp < targets[depend].timestamp)
+                    {
+                        needs_update = true;
+                        break;
+                    }
+                }
+            }
+            if (needs_update)
+            {
+                result.push_back(current.rule);
+            }
         }
         return result;
     }
@@ -160,7 +181,9 @@ void test_build_base()
     {
     }
 
-    BuildBase base({ { "A", {"B"}, "build A" }, { "B", {}, "build B" } });
+    {
+        BuildBase base({ { "A", {"B"}, "build A" }, { "B", {}, "build B" } });
+    }
 }
 
 void test_topo_sort()
@@ -183,10 +206,19 @@ void test_topo_sort()
     }
 }
 
+void test_timestamps()
+{
+    BuildBase base({ { "A", {"B", "C"}, "build A", 0 }, { "B", {"D"}, "build B", 0 }, { "C", {"D"}, "build C", 1 }, { "D", {}, "build D", 1 } });
+    vector<string> result = base.build();
+    vector<string> expect = { "build B", "build A" };
+    assert(result == expect);
+}
+
 void build_main()
 {
     cout << "Build Manager:" << endl;
     test_build_base();
     test_topo_sort();
+    test_timestamps();
     cout << "All tests passed" << endl;
 }
