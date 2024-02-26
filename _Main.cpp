@@ -12,6 +12,7 @@ void profiling_main();
 void persist_main();
 void binary_main();
 void database_main();
+void build_main();
 
 int main()
 {
@@ -28,6 +29,7 @@ int main()
     //profiling_main();
     //persist_main();
     //binary_main();
-    database_main();
+    //database_main();
+    build_main();
     return 0;
 }

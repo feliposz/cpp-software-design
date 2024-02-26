@@ -163,6 +163,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="BinaryData.cpp" />
+    <ClCompile Include="BuildManager.cpp" />
     <ClCompile Include="Database.cpp" />
     <ClCompile Include="FileArchiver.cpp" />
     <ClCompile Include="FindDuplicateFiles.cpp" />
